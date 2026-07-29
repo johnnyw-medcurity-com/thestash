@@ -486,6 +486,7 @@
           <input type="file" id="receipt-input" name="receipt" accept="image/*,application/pdf" capture="environment">
         </label>
         <div id="receipt-status" class="muted" style="margin-top:-6px;"></div>
+        <div id="receipt-raw-text"></div>
         ${existing && existing.receipt_filename ? `<p class="muted">A receipt is already attached. Choosing a new file replaces it.</p>` : ""}
         <button class="btn btn-primary" type="submit">${isEdit ? "Save Changes" : "Add Expense"}</button>
       </form>
@@ -504,10 +505,12 @@
 
     const receiptInput = form.querySelector("#receipt-input");
     const receiptStatus = form.querySelector("#receipt-status");
+    const receiptRawText = form.querySelector("#receipt-raw-text");
     receiptInput.addEventListener("change", async () => {
       const file = receiptInput.files[0];
       if (!file) return;
       receiptStatus.textContent = "Reading receipt…";
+      receiptRawText.innerHTML = "";
       try {
         const parseForm = new FormData();
         parseForm.append("receipt", file);
@@ -537,6 +540,13 @@
         receiptStatus.textContent = filledAny
           ? "Filled in from the receipt — check it over and adjust anything that's wrong."
           : "Couldn't make out the details on this receipt — fill them in below.";
+        if (result.raw_text) {
+          receiptRawText.innerHTML = `
+            <details style="margin-top:6px;">
+              <summary class="muted" style="cursor:pointer;">What the scanner read</summary>
+              <pre style="white-space:pre-wrap; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px; margin-top:6px; max-height:200px; overflow-y:auto;">${escapeHtml(result.raw_text)}</pre>
+            </details>`;
+        }
       } catch (err) {
         receiptStatus.textContent = "Couldn't auto-read this receipt — fill in the details below.";
       }

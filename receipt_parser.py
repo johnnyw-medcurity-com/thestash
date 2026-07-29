@@ -91,13 +91,56 @@ def _extract_amount(text):
     return None
 
 
+ADDRESS_OR_PHONE_HINTS = re.compile(
+    r"\b(pkwy|parkway|street|st\.|avenue|ave\.|blvd|hwy|highway|drive|dr\.|road|rd\.|"
+    r"suite|ste\.|po box|tel|phone|fax)\b|,\s*[A-Z]{2}\s*\d{5}|\(\d{3}\)\s?\d{3}[-\s]?\d{4}",
+    re.IGNORECASE,
+)
+
+BUSINESS_KEYWORDS = [
+    "inn", "suites", "hotel", "motel", "resort", "restaurant", "cafe", "café",
+    "airlines", "airways", "rental", "llc", "inc", "corp", "store", "market",
+    "shop", "bar", "grill", "diner", "bistro",
+]
+
+
+def _normalize_line(line):
+    return re.sub(r"\s+", " ", line.strip().lower())
+
+
 def _extract_vendor(text):
-    for line in text.splitlines()[:6]:
+    candidates = []
+    for line in text.splitlines()[:12]:
         cleaned = line.strip()
         letters = sum(1 for c in cleaned if c.isalpha())
-        if letters >= 3:
-            return cleaned[:60]
-    return None
+        if letters < 3 or ADDRESS_OR_PHONE_HINTS.search(cleaned):
+            continue
+        candidates.append(cleaned)
+
+    if not candidates:
+        return None
+
+    # A vendor name often appears more than once near the top of a receipt —
+    # e.g. split across a logo ("La Quinta" / "BY WYNDHAM") and then again in
+    # full ("La Quinta Inn & Suites by Wyndham Forsyth"). When one candidate
+    # line contains another, that's a strong signal it's the vendor — and the
+    # longest such line is usually the fullest, most useful version of the name.
+    normalized = [_normalize_line(c) for c in candidates]
+    repeat_scores = [0] * len(candidates)
+    for i, a in enumerate(normalized):
+        for j, b in enumerate(normalized):
+            if i != j and (a in b or b in a):
+                repeat_scores[i] += 1
+
+    if any(repeat_scores):
+        best = max(range(len(candidates)), key=lambda i: (repeat_scores[i], len(candidates[i])))
+        return candidates[best][:60]
+
+    for candidate in candidates:
+        if any(kw in candidate.lower() for kw in BUSINESS_KEYWORDS):
+            return candidate[:60]
+
+    return candidates[0][:60]
 
 
 def _extract_category(text):

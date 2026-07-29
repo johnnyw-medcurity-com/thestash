@@ -332,6 +332,7 @@ def parse_receipt():
         "amount": result.get("amount"),
         "vendor": result.get("vendor"),
         "category": result.get("category"),
+        "raw_text": (result.get("raw_text") or "")[:2000],
     })
 
 
