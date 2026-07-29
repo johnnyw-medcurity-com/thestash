@@ -22,7 +22,10 @@ DATE_PATTERNS = [
     re.compile(rf"\b(\d{{1,2}})\s+({_MONTH_NAME})[a-z]*\.?\s+(\d{{4}})\b", re.IGNORECASE),
 ]
 
-AMOUNT_PATTERN = re.compile(r"\$?\s?(\d{1,3}(?:,\d{3})*\.\d{2})\b")
+# \d+ (not \d{1,3}) for the leading digit group — otherwise a 4+ digit total
+# with no thousands comma (e.g. OCR dropping the comma in "1,060.00" down to
+# "1060.00") forces the regex to skip the leading digit and match "060.00".
+AMOUNT_PATTERN = re.compile(r"\$?\s?(\d+(?:,\d{3})*\.\d{2})\b")
 
 CATEGORY_KEYWORDS = [
     ("Flights", [
