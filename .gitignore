@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+expense.db
+expense.db-shm
+expense.db-wal
+.secret_key
+uploads/*
+!uploads/.gitkeep
+.claude/

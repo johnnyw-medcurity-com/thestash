@@ -1,0 +1,9 @@
+{
+  "name": "Travel Expenses",
+  "short_name": "Expenses",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1e293b",
+  "icons": []
+}
