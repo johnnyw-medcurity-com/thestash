@@ -103,17 +103,36 @@ BUSINESS_KEYWORDS = [
     "shop", "bar", "grill", "diner", "bistro",
 ]
 
+# Invoice/reservation metadata labels that sit near the top of a receipt and
+# could otherwise be mistaken for the vendor name (e.g. "Room No. 213").
+# Compared letters-only so OCR noise in spacing/punctuation doesn't matter.
+METADATA_LABEL_PREFIXES = [
+    "roomno", "cashierno", "foliono", "confno", "contno", "pageno",
+    "membershipno", "groupcode", "tarecord", "locator", "invoice",
+    "arrival", "departure", "checkin", "checkout",
+]
+
 
 def _normalize_line(line):
     return re.sub(r"\s+", " ", line.strip().lower())
 
 
+def _letters_only(line):
+    return re.sub(r"[^a-z]", "", line.lower())
+
+
+def _looks_like_metadata_label(line):
+    letters = _letters_only(line)
+    return any(letters.startswith(prefix) for prefix in METADATA_LABEL_PREFIXES)
+
+
 def _extract_vendor(text):
+    non_blank_lines = [line for line in text.splitlines() if line.strip()]
     candidates = []
-    for line in text.splitlines()[:12]:
+    for line in non_blank_lines[:15]:
         cleaned = line.strip()
         letters = sum(1 for c in cleaned if c.isalpha())
-        if letters < 3 or ADDRESS_OR_PHONE_HINTS.search(cleaned):
+        if letters < 3 or ADDRESS_OR_PHONE_HINTS.search(cleaned) or _looks_like_metadata_label(cleaned):
             continue
         candidates.append(cleaned)
 
