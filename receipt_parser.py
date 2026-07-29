@@ -27,6 +27,19 @@ DATE_PATTERNS = [
 # "1060.00") forces the regex to skip the leading digit and match "060.00".
 AMOUNT_PATTERN = re.compile(r"\$?\s?(\d+(?:,\d{3})*\.\d{2})\b")
 
+# Some OCR passes render cents with a comma instead of a period (e.g.
+# "244,00"). Requiring exactly 2 digits after the comma, followed by a word
+# boundary, means this can't misfire on a legitimate thousands-grouped
+# number like "1,060.00" (there \d{2} would need to stop after "06", but the
+# following "0" blocks the boundary, so it never matches).
+COMMA_DECIMAL_PATTERN = re.compile(r"\$?\s?(\d+),(\d{2})\b")
+
+
+def _find_amounts(text):
+    amounts = [float(m.group(1).replace(",", "")) for m in AMOUNT_PATTERN.finditer(text)]
+    amounts += [float(f"{m.group(1)}.{m.group(2)}") for m in COMMA_DECIMAL_PATTERN.finditer(text)]
+    return amounts
+
 CATEGORY_KEYWORDS = [
     ("Flights", [
         "airlines", "airways", "flight", "boarding pass", "delta", "united",
@@ -83,12 +96,11 @@ def _extract_amount(text):
     for line in lines:
         lower = line.lower()
         if "total" in lower and "subtotal" not in lower:
-            for m in AMOUNT_PATTERN.finditer(line):
-                total_candidates.append(float(m.group(1).replace(",", "")))
+            total_candidates.extend(_find_amounts(line))
     if total_candidates:
         return total_candidates[-1]
 
-    all_amounts = [float(m.group(1).replace(",", "")) for m in AMOUNT_PATTERN.finditer(text)]
+    all_amounts = _find_amounts(text)
     if all_amounts:
         return max(all_amounts)
     return None
