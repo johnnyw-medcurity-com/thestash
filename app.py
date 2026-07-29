@@ -10,6 +10,7 @@ from database import get_db, init_db, DATA_DIR
 from auth import hash_password, verify_password, create_token, require_auth
 from categories import COVERED_CATEGORIES, NEEDS_REVIEW_CATEGORY, ALL_CATEGORIES
 from pdf_report import build_trip_pdf
+from receipt_parser import parse_receipt_image
 
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -307,6 +308,31 @@ def delete_trip(trip_id):
                 path.unlink()
 
     return jsonify({"ok": True})
+
+
+# ---------- Receipt parsing ----------
+
+
+@app.route("/api/receipts/parse", methods=["POST"])
+@require_auth
+def parse_receipt():
+    file = request.files.get("receipt")
+    if not file or not file.filename:
+        return jsonify({"error": "No receipt file provided"}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Unsupported receipt file type"}), 400
+
+    result = parse_receipt_image(file.stream)
+    if not result.get("ocr_available"):
+        return jsonify({"ocr_available": False})
+
+    return jsonify({
+        "ocr_available": True,
+        "date": result.get("date"),
+        "amount": result.get("amount"),
+        "vendor": result.get("vendor"),
+        "category": result.get("category"),
+    })
 
 
 # ---------- Expenses ----------

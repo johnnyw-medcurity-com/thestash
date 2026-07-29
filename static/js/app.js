@@ -364,10 +364,10 @@
       <div class="card">
         <div class="row1" style="margin-bottom:8px;">
           <h3 style="margin:0;">Expenses (${expenses.length})</h3>
-          <button class="btn btn-primary btn-sm" data-action="add-expense">+ Add</button>
+          <button class="btn btn-primary btn-sm" data-action="add-expense">📷 Add from receipt</button>
         </div>
         ${expenses.length === 0
-          ? `<p class="muted">No expenses logged yet. Add one and photograph the receipt right away.</p>`
+          ? `<p class="muted">No expenses logged yet. Tap the button above, snap the receipt, and the date/vendor/amount/category get filled in for you to confirm.</p>`
           : `<div id="expense-list">${expenses.map(expenseRowHtml).join("")}</div>`}
       </div>
 
@@ -483,8 +483,9 @@
           <span>Flag for review &mdash; not sure this qualifies</span>
         </label>
         <label>Receipt photo
-          <input type="file" name="receipt" accept="image/*,application/pdf" capture="environment">
+          <input type="file" id="receipt-input" name="receipt" accept="image/*,application/pdf" capture="environment">
         </label>
+        <div id="receipt-status" class="muted" style="margin-top:-6px;"></div>
         ${existing && existing.receipt_filename ? `<p class="muted">A receipt is already attached. Choosing a new file replaces it.</p>` : ""}
         <button class="btn btn-primary" type="submit">${isEdit ? "Save Changes" : "Add Expense"}</button>
       </form>
@@ -500,6 +501,50 @@
         flaggedBox.checked = true;
       }
     });
+
+    const receiptInput = form.querySelector("#receipt-input");
+    const receiptStatus = form.querySelector("#receipt-status");
+    receiptInput.addEventListener("change", async () => {
+      const file = receiptInput.files[0];
+      if (!file) return;
+      receiptStatus.textContent = "Reading receipt…";
+      try {
+        const parseForm = new FormData();
+        parseForm.append("receipt", file);
+        const result = await api("/api/receipts/parse", { method: "POST", form: parseForm });
+        if (!result.ocr_available) {
+          receiptStatus.textContent = "Couldn't auto-read this receipt — fill in the details below.";
+          return;
+        }
+        let filledAny = false;
+        if (result.date) {
+          form.querySelector('input[name="date"]').value = result.date;
+          filledAny = true;
+        }
+        if (result.vendor) {
+          form.querySelector('input[name="vendor"]').value = result.vendor;
+          filledAny = true;
+        }
+        if (result.amount) {
+          form.querySelector('input[name="amount"]').value = result.amount;
+          filledAny = true;
+        }
+        if (result.category) {
+          categorySelect.value = result.category;
+          categorySelect.dispatchEvent(new Event("change"));
+          filledAny = true;
+        }
+        receiptStatus.textContent = filledAny
+          ? "Filled in from the receipt — check it over and adjust anything that's wrong."
+          : "Couldn't make out the details on this receipt — fill them in below.";
+      } catch (err) {
+        receiptStatus.textContent = "Couldn't auto-read this receipt — fill in the details below.";
+      }
+    });
+
+    if (!isEdit) {
+      receiptInput.click();
+    }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

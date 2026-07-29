@@ -7,12 +7,17 @@ sending an expense report (PDF) to whoever needs to review or reimburse it.
 
 - Each person creates their own account and logs their own trips.
 - Every trip is tied to a client and has a start/end date and purpose.
-- Expenses are logged against a trip: date, category, vendor, amount, notes, and an
-  optional receipt photo (the file picker opens the camera directly on a phone).
+- Adding an expense is photo-first: tap "Add from receipt," the camera opens
+  immediately, and once you snap the photo the app OCRs it (via Tesseract) and
+  pre-fills the date, vendor, amount, and a guessed category. Every field stays
+  editable — glance it over, fix anything it misread, and save. If it can't make
+  anything out (blurry photo, unusual layout, or running somewhere without Tesseract
+  installed), the fields are just left blank for manual entry instead of erroring out.
 - Categories mirror the covered/not-covered expense policy (flights, lodging, rental
   car/mileage, meals, parking/tolls/transportation, other direct trip costs). Anything
-  that doesn't clearly fit can be logged as "Other (Needs Review)" or flagged manually
-  so nothing gets silently guessed at.
+  that doesn't clearly fit — including anything the receipt scanner can't confidently
+  categorize — gets logged as "Other (Needs Review)" or flagged manually so nothing
+  gets silently guessed at.
 - Each trip can generate a PDF expense report (itemized table, subtotals by category,
   grand total, and a flagged-for-review section) and download it on demand.
 - "Send Report" downloads the PDF and opens a pre-filled email draft in your own mail
@@ -88,6 +93,12 @@ pip install -r requirements.txt
 make the repo public first since it contains no secrets, `.gitignore` already keeps the
 database/receipts/secret key out of it, or generate a GitHub personal access token
 yourself and use it as the password when prompted.)
+
+Receipt photo auto-fill needs the `tesseract` OCR binary — PythonAnywhere already has
+it preinstalled system-wide, so no extra setup is needed there. (If you ever move this
+app to a different host, check that `tesseract` is installed and on `PATH`, or that
+host's package manager for how to add it — without it, the app still works fine, it
+just leaves the expense fields blank for manual entry instead of pre-filling them.)
 
 **3. Create the web app**: go to the **Web** tab → **Add a new web app** → when asked
 about the framework, choose **Manual configuration** (not the Flask wizard, since we
