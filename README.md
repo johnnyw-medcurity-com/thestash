@@ -62,56 +62,91 @@ The app runs at http://localhost:5000
   their own reports. That would be a reasonable next addition if a manager needs a
   combined view.
 
-## Deploying to Render (making it a real published web app)
+## Deploying to PythonAnywhere (free, making it a real published web app)
 
 This turns the app from "runs on my laptop" into a URL anyone on the team can open from
-their phone. The app is already configured for this: `gunicorn` as the production
-server (`Procfile`), and a `DATA_DIR` environment variable that points the database and
-uploaded receipts at a persistent disk instead of the app's own folder.
+their phone, at no cost. PythonAnywhere's free tier gives you an always-on Flask app
+plus a persistent home directory — no separate database/disk setup needed, unlike most
+other free hosts whose filesystems get wiped on every restart.
 
-**1. Push this folder to a GitHub repo** (Render deploys from git):
+The code is already pushed to GitHub at `github.com/johnnyw-medcurity-com/thestash`.
 
-```bash
-cd "/Users/johnnyw/Claude Code/travel expense"
-git init
-git add -A
-git commit -m "Travel expense app"
-```
+**1. Sign up** at [pythonanywhere.com](https://www.pythonanywhere.com) — choose the free
+**Beginner** account.
 
-Then create an empty repository on [github.com/new](https://github.com/new) (don't
-initialize it with a README), and:
+**2. Open a Bash console** from the PythonAnywhere dashboard (**Consoles** tab → **Bash**),
+then clone the repo and install dependencies:
 
 ```bash
-git remote add origin <your-new-repo-url>
-git branch -M main
-git push -u origin main
+git clone https://github.com/johnnyw-medcurity-com/thestash.git
+cd thestash
+mkvirtualenv --python=/usr/bin/python3.10 travel-expense-env
+pip install -r requirements.txt
 ```
 
-**2. Create a Render account** at [render.com](https://render.com) (free to sign up).
+(If `thestash` is a private repo, this clone will ask for GitHub credentials — either
+make the repo public first since it contains no secrets, `.gitignore` already keeps the
+database/receipts/secret key out of it, or generate a GitHub personal access token
+yourself and use it as the password when prompted.)
 
-**3. Deploy using the included blueprint:**
-- In the Render dashboard, click **New +** → **Blueprint**.
-- Connect your GitHub account and select this repo. Render will read `render.yaml`
-  and set up the web service, environment variables, and persistent disk automatically.
-- Click **Apply** to deploy.
+**3. Create the web app**: go to the **Web** tab → **Add a new web app** → when asked
+about the framework, choose **Manual configuration** (not the Flask wizard, since we
+already have our own `app.py`) → pick **Python 3.10**.
 
-**Or deploy manually** (New + → Web Service) if you'd rather not use the blueprint:
-- Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn app:app --workers 2 --threads 4 --timeout 60`
-- Add a persistent disk (Settings → Disks): mount path `/var/data`, size 1 GB.
-- Environment variables: `DATA_DIR=/var/data`, `SECRET_KEY=<click "Generate">`,
-  `FLASK_DEBUG=false`.
+**4. Point it at your virtualenv**: on the Web tab, in the "Virtualenv" section, enter:
+```
+/home/<your-username>/.virtualenvs/travel-expense-env
+```
 
-**Important — plan choice:** Render's free web service tier has an *ephemeral*
-filesystem and doesn't support persistent disks, so the SQLite database and every
-uploaded receipt would be wiped on each restart/redeploy. That defeats the purpose of
-an expense tracker. Use a paid **Starter** instance (currently ~$7/mo) so the disk
-persists. `render.yaml` is already set to `plan: starter` for this reason.
+**5. Edit the WSGI file**: still on the Web tab, click the WSGI configuration file link
+(something like `/var/www/<your-username>_pythonanywhere_com_wsgi.py`), delete its
+contents, and replace with:
 
-Once deployed, Render gives you a URL like `https://travel-expenses.onrender.com` —
-that's what you'd open from a phone instead of `http://<local-ip>:5000`.
+```python
+import sys
 
-**Future upgrade path:** if the team outgrows a single small disk (e.g. lots of
-concurrent writers), the next step would be swapping SQLite for Render's managed
-Postgres and receipt storage for an S3-compatible bucket (e.g. Cloudflare R2) — not
-needed for a small team, but worth knowing the ceiling.
+path = '/home/<your-username>/thestash'
+if path not in sys.path:
+    sys.path.append(path)
+
+from app import app as application
+```
+
+(Replace `<your-username>` with your actual PythonAnywhere username, shown in the paths
+already on that page.)
+
+**6. Reload**: click the big green **Reload** button at the top of the Web tab.
+
+**7. Open your app**: PythonAnywhere shows your URL at the top of the Web tab, like
+`https://<your-username>.pythonanywhere.com`. That's what you open from a phone instead
+of `http://<local-ip>:5000`.
+
+**Free tier limitations worth knowing:**
+- No custom domain — you're on `<your-username>.pythonanywhere.com`.
+- A daily CPU-seconds allowance that resets every day — plenty for occasional expense
+  logging by a small team, but worth knowing if usage ever grows heavily.
+- Outbound internet from free accounts is limited to a whitelist of sites, but this app
+  never calls out to anything else, so it's unaffected.
+- Free accounts get suspended after a few months of no login — just log in
+  occasionally to keep it active.
+- After you push new commits to GitHub, you'll need to `git pull` inside a
+  PythonAnywhere Bash console and click **Reload** again — there's no auto-deploy on
+  the free tier.
+
+## Alternative: deploying to Render (paid, but simpler ongoing ops)
+
+If the team later wants guaranteed uptime, auto-deploy on every push, and no CPU-second
+limits, this repo is also pre-configured for [Render](https://render.com) — see
+`render.yaml` and `Procfile`. Render's free tier doesn't support persistent disks
+(your database and receipts would be wiped on every restart), so this path requires a
+paid **Starter** instance (~$7/mo):
+
+- **New +** → **Blueprint** in the Render dashboard, connect this GitHub repo, and
+  Render reads `render.yaml` to set up the web service, a 1GB persistent disk mounted
+  at `/var/data`, and environment variables (`DATA_DIR`, `SECRET_KEY`, `FLASK_DEBUG`)
+  automatically. Click **Apply**.
+
+**Future upgrade path beyond either of these:** if the team outgrows a single small
+disk (e.g. lots of concurrent writers), the next step would be swapping SQLite for a
+managed Postgres database and receipt storage for an S3-compatible bucket (e.g.
+Cloudflare R2) — not needed for a small team, but worth knowing the ceiling.
