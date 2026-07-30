@@ -8,7 +8,13 @@ from werkzeug.utils import secure_filename
 
 from database import get_db, init_db, DATA_DIR
 from auth import hash_password, verify_password, create_token, require_auth
-from categories import COVERED_CATEGORIES, NEEDS_REVIEW_CATEGORY, ALL_CATEGORIES
+from categories import (
+    COVERED_CATEGORIES,
+    NEEDS_REVIEW_CATEGORY,
+    ALL_CATEGORIES,
+    MILEAGE_CATEGORY,
+    MILEAGE_RATE_PER_MILE,
+)
 from pdf_report import build_trip_pdf
 from receipt_parser import parse_receipt_image
 
@@ -64,6 +70,7 @@ def expense_public(row):
         "notes": row["notes"],
         "flagged": bool(row["flagged"]),
         "receipt_filename": row["receipt_filename"],
+        "miles": row["miles"],
         "created_at": row["created_at"],
     }
 
@@ -141,7 +148,12 @@ def me():
 @app.route("/api/categories")
 @require_auth
 def categories():
-    return jsonify({"covered": COVERED_CATEGORIES, "needs_review": NEEDS_REVIEW_CATEGORY})
+    return jsonify({
+        "covered": COVERED_CATEGORIES,
+        "needs_review": NEEDS_REVIEW_CATEGORY,
+        "mileage_category": MILEAGE_CATEGORY,
+        "mileage_rate": MILEAGE_RATE_PER_MILE,
+    })
 
 
 # ---------- Clients ----------
@@ -352,23 +364,39 @@ def create_expense(trip_id):
     date = form.get("date") or ""
     category = form.get("category") or ""
     vendor = (form.get("vendor") or "").strip()
-    amount_raw = form.get("amount") or "0"
     notes = (form.get("notes") or "").strip()
     flagged = form.get("flagged") in ("1", "true", "True", "on")
 
-    try:
-        amount = float(amount_raw)
-    except ValueError:
+    if not date or not category:
         db.close()
-        return jsonify({"error": "Amount must be a number"}), 400
-
-    if not date or not category or amount <= 0:
-        db.close()
-        return jsonify({"error": "Date, category, and a positive amount are required"}), 400
-
+        return jsonify({"error": "Date and category are required"}), 400
     if category not in ALL_CATEGORIES:
         db.close()
         return jsonify({"error": "Unknown category"}), 400
+
+    miles = None
+    if category == MILEAGE_CATEGORY:
+        try:
+            miles = float(form.get("miles") or "0")
+        except ValueError:
+            db.close()
+            return jsonify({"error": "Miles must be a number"}), 400
+        if miles <= 0:
+            db.close()
+            return jsonify({"error": "Miles driven must be greater than zero"}), 400
+        # Computed server-side so the reimbursed amount can never drift from
+        # the rate, regardless of what the client displayed/sent.
+        amount = round(miles * MILEAGE_RATE_PER_MILE, 2)
+    else:
+        try:
+            amount = float(form.get("amount") or "0")
+        except ValueError:
+            db.close()
+            return jsonify({"error": "Amount must be a number"}), 400
+        if amount <= 0:
+            db.close()
+            return jsonify({"error": "A positive amount is required"}), 400
+
     if category == NEEDS_REVIEW_CATEGORY:
         flagged = True
 
@@ -383,9 +411,9 @@ def create_expense(trip_id):
         file.save(UPLOAD_DIR / receipt_filename)
 
     cur = db.execute(
-        "INSERT INTO expenses (trip_id, date, category, vendor, amount, notes, flagged, receipt_filename, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (trip_id, date, category, vendor, amount, notes, int(flagged), receipt_filename, now_iso()),
+        "INSERT INTO expenses (trip_id, date, category, vendor, amount, notes, flagged, receipt_filename, miles, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (trip_id, date, category, vendor, amount, notes, int(flagged), receipt_filename, miles, now_iso()),
     )
     db.commit()
     expense_id = cur.lastrowid
@@ -420,12 +448,32 @@ def update_expense(expense_id):
             fields["category"] = form.get("category")
         if "vendor" in form:
             fields["vendor"] = form.get("vendor")
-        if "amount" in form:
-            try:
-                fields["amount"] = float(form.get("amount"))
-            except ValueError:
-                db.close()
-                return jsonify({"error": "Amount must be a number"}), 400
+
+        effective_category = fields.get("category", row["category"])
+        if "miles" in form or "amount" in form:
+            if effective_category == MILEAGE_CATEGORY:
+                try:
+                    miles_val = float(form.get("miles") or "0")
+                except ValueError:
+                    db.close()
+                    return jsonify({"error": "Miles must be a number"}), 400
+                if miles_val <= 0:
+                    db.close()
+                    return jsonify({"error": "Miles driven must be greater than zero"}), 400
+                fields["miles"] = miles_val
+                fields["amount"] = round(miles_val * MILEAGE_RATE_PER_MILE, 2)
+            else:
+                try:
+                    amount_val = float(form.get("amount") or "0")
+                except ValueError:
+                    db.close()
+                    return jsonify({"error": "Amount must be a number"}), 400
+                if amount_val <= 0:
+                    db.close()
+                    return jsonify({"error": "A positive amount is required"}), 400
+                fields["amount"] = amount_val
+                fields["miles"] = None
+
         if "notes" in form:
             fields["notes"] = form.get("notes")
         if "flagged" in form:
@@ -447,7 +495,33 @@ def update_expense(expense_id):
             fields["receipt_filename"] = new_filename
     else:
         data = request.get_json(force=True) or {}
-        fields = {k: v for k, v in data.items() if k in ("date", "category", "vendor", "amount", "notes", "flagged")}
+        fields = {k: v for k, v in data.items() if k in ("date", "category", "vendor", "notes", "flagged")}
+
+        effective_category = fields.get("category", row["category"])
+        if "miles" in data or "amount" in data:
+            if effective_category == MILEAGE_CATEGORY:
+                try:
+                    miles_val = float(data.get("miles") or 0)
+                except (TypeError, ValueError):
+                    db.close()
+                    return jsonify({"error": "Miles must be a number"}), 400
+                if miles_val <= 0:
+                    db.close()
+                    return jsonify({"error": "Miles driven must be greater than zero"}), 400
+                fields["miles"] = miles_val
+                fields["amount"] = round(miles_val * MILEAGE_RATE_PER_MILE, 2)
+            else:
+                try:
+                    amount_val = float(data.get("amount") or 0)
+                except (TypeError, ValueError):
+                    db.close()
+                    return jsonify({"error": "Amount must be a number"}), 400
+                if amount_val <= 0:
+                    db.close()
+                    return jsonify({"error": "A positive amount is required"}), 400
+                fields["amount"] = amount_val
+                fields["miles"] = None
+
         if "flagged" in fields:
             fields["flagged"] = int(bool(fields["flagged"]))
         if fields.get("category") == NEEDS_REVIEW_CATEGORY:

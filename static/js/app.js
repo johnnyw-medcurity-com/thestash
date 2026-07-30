@@ -7,7 +7,7 @@
     token: localStorage.getItem("token") || null,
     user: JSON.parse(localStorage.getItem("user") || "null"),
     clients: [],
-    categories: { covered: [], needs_review: "" },
+    categories: { covered: [], needs_review: "", mileage_category: "", mileage_rate: 0 },
   };
 
   // ---------------- API helper ----------------
@@ -422,7 +422,7 @@
         <div class="expense-main" style="flex:1;">
           <div class="cat">${escapeHtml(exp.category)}${exp.flagged ? `<span class="flag-badge">FLAGGED</span>` : ""}</div>
           <div class="vendor">${escapeHtml(exp.vendor || "")}</div>
-          <div class="date">${fmtDate(exp.date)}${exp.notes ? " · " + escapeHtml(exp.notes) : ""}</div>
+          <div class="date">${fmtDate(exp.date)}${exp.miles != null ? ` · ${exp.miles} mi` : ""}${exp.notes ? " · " + escapeHtml(exp.notes) : ""}</div>
           <div class="expense-actions">
             <button data-action="edit-expense" data-id="${exp.id}">Edit</button>
             <button class="danger" data-action="delete-expense" data-id="${exp.id}">Delete</button>
@@ -539,7 +539,11 @@
         <label>Vendor
           <input type="text" name="vendor" placeholder="e.g. Delta, Marriott, Uber" value="${existing ? escapeHtml(existing.vendor || "") : ""}">
         </label>
-        <label>Amount (USD)
+        <label id="miles-field">Miles driven
+          <input type="number" name="miles" step="0.1" min="0.1" inputmode="decimal" value="${existing && existing.miles != null ? existing.miles : ""}">
+        </label>
+        <div id="mileage-hint" class="muted" style="margin-top:-6px;"></div>
+        <label id="amount-field">Amount (USD)
           <input type="number" name="amount" step="0.01" min="0.01" value="${existing ? existing.amount : ""}" required>
         </label>
         <label>Notes
@@ -570,6 +574,35 @@
         flaggedBox.checked = true;
       }
     });
+
+    const milesField = form.querySelector("#miles-field");
+    const milesInput = form.querySelector('input[name="miles"]');
+    const mileageHint = form.querySelector("#mileage-hint");
+    const amountField = form.querySelector("#amount-field");
+    const amountInput = form.querySelector('input[name="amount"]');
+    const mileageRate = state.categories.mileage_rate || 0;
+
+    function recomputeMileageAmount() {
+      const miles = parseFloat(milesInput.value) || 0;
+      mileageHint.textContent = miles > 0
+        ? `${miles} mi × $${mileageRate.toFixed(3)}/mi = ${fmtMoney(miles * mileageRate)}`
+        : `Reimbursed at $${mileageRate.toFixed(3)}/mile`;
+      amountInput.value = miles > 0 ? (miles * mileageRate).toFixed(2) : "";
+    }
+
+    function updateMileageUI() {
+      const isMileage = categorySelect.value === state.categories.mileage_category;
+      milesField.style.display = isMileage ? "" : "none";
+      mileageHint.style.display = isMileage ? "" : "none";
+      amountField.style.display = isMileage ? "none" : "";
+      milesInput.required = isMileage;
+      amountInput.required = !isMileage;
+      if (isMileage) recomputeMileageAmount();
+    }
+
+    categorySelect.addEventListener("change", updateMileageUI);
+    milesInput.addEventListener("input", recomputeMileageAmount);
+    updateMileageUI();
 
     const receiptInput = form.querySelector("#receipt-input");
     const receiptStatus = form.querySelector("#receipt-status");

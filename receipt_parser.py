@@ -52,6 +52,11 @@ CATEGORY_KEYWORDS = [
     ("Rental Car / Mileage", [
         "rental", "hertz", "avis", "enterprise rent", "budget rent", "car rental",
     ]),
+    ("Fuel", [
+        "gas station", "fuel", "unleaded", "shell", "chevron", "exxon", "mobil",
+        "texaco", "arco", "citgo", "sunoco", "valero", "conoco", "circle k",
+        "quiktrip", "racetrac", "speedway fuel",
+    ]),
     ("Meals", [
         "restaurant", "cafe", "café", "diner", "grill", "coffee",
         "starbucks", "bar & grill", "bistro", "pizzeria", "food",

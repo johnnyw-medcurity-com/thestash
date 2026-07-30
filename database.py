@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     notes TEXT,
     flagged INTEGER NOT NULL DEFAULT 0,
     receipt_filename TEXT,
+    miles REAL,
     created_at TEXT NOT NULL
 );
 
@@ -67,5 +68,10 @@ def get_db():
 def init_db():
     conn = get_db()
     conn.executescript(SCHEMA)
+    # Lightweight migration for columns added after a database already
+    # exists in the wild (CREATE TABLE IF NOT EXISTS above won't add them).
+    existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(expenses)")}
+    if "miles" not in existing_cols:
+        conn.execute("ALTER TABLE expenses ADD COLUMN miles REAL")
     conn.commit()
     conn.close()

@@ -18,7 +18,7 @@ from reportlab.platypus import (
     PageBreak,
 )
 
-from categories import NEEDS_REVIEW_CATEGORY
+from categories import NEEDS_REVIEW_CATEGORY, MILEAGE_RATE_PER_MILE
 
 NAVY = colors.HexColor("#1e293b")
 RED = colors.HexColor("#dc2626")
@@ -166,6 +166,9 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
         category_totals[exp["category"]] += amount
 
         note = exp["notes"] or ""
+        if exp["miles"] is not None:
+            mileage_detail = f"{exp['miles']:g} mi @ ${MILEAGE_RATE_PER_MILE:.3f}/mi"
+            note = f"{mileage_detail} — {note}" if note else mileage_detail
         if exp["flagged"]:
             note = ("⚠ " + note).strip()
         note_style = cell_style_flagged if exp["flagged"] else cell_style
