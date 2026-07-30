@@ -114,9 +114,6 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
     title_style = ParagraphStyle(
         "TitleStyle", parent=styles["Title"], textColor=NAVY, fontSize=18, spaceAfter=2
     )
-    meta_style = ParagraphStyle(
-        "MetaStyle", parent=styles["Normal"], fontSize=10, textColor=colors.HexColor("#475569")
-    )
     section_style = ParagraphStyle(
         "SectionStyle", parent=styles["Heading2"], textColor=NAVY, fontSize=12, spaceBefore=14, spaceAfter=6
     )
@@ -262,24 +259,6 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
             )
         )
         story.append(flag_table)
-
-    receipts_missing = [e for e in expenses if not e["receipt_filename"]]
-    story.append(Spacer(1, 14))
-    story.append(Paragraph("Receipts", section_style))
-    story.append(
-        Paragraph(
-            f"{len(expenses) - len(receipts_missing)} of {len(expenses)} expense(s) have a receipt attached in the system.",
-            meta_style,
-        )
-    )
-    if receipts_missing:
-        story.append(
-            Paragraph(
-                "Missing receipts for: "
-                + ", ".join(f"{_fmt_date(e['date'])} {_xml_escape(e['vendor'] or e['category'])}" for e in receipts_missing),
-                warn_style,
-            )
-        )
 
     receipt_expenses = [e for e in expenses if e["receipt_filename"]]
     if receipt_expenses and upload_dir:
