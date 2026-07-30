@@ -401,11 +401,8 @@
 
       <div class="card">
         <h3>Report</h3>
-        <p class="muted">Generate a PDF report for this trip, then send it to whoever needs to review or reimburse it.</p>
-        <div class="inline-row">
-          <button class="btn btn-outline" data-action="download-report">Download PDF</button>
-          <button class="btn btn-secondary" data-action="send-report">Send Report</button>
-        </div>
+        <p class="muted">Generate a PDF report for this trip to send to whoever needs to review or reimburse it.</p>
+        <button class="btn btn-outline" data-action="download-report">Download PDF</button>
       </div>
 
       <div class="card" style="border-color:#fecaca;">
@@ -467,7 +464,6 @@
         restore();
       }
     });
-    root.querySelector('[data-action="send-report"]').addEventListener("click", () => openSendReportModal(trip));
     root.querySelector('[data-action="delete-trip"]').addEventListener("click", (e) => deleteTrip(trip.id, e.currentTarget));
     root.querySelectorAll('[data-action="view-receipt"]').forEach((img) => {
       img.addEventListener("click", () => openReceiptLightbox(img.dataset.src));
@@ -740,61 +736,6 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
     return filename;
-  }
-
-  function openSendReportModal(trip) {
-    const modal = openModal(`
-      <div class="modal-header">
-        <h2 style="margin:0;">Send Report</h2>
-        <button class="modal-close" data-close>&times;</button>
-      </div>
-      <p class="muted">This downloads the PDF, then opens an email draft in your mail app. Attach the downloaded file before you hit send.</p>
-      <div id="report-error"></div>
-      <form id="report-form">
-        <label>Recipient name
-          <input type="text" name="recipient_name" placeholder="e.g. Finance / your manager">
-        </label>
-        <label>Recipient email
-          <input type="email" name="recipient_email" required>
-        </label>
-        <label>Message
-          <textarea name="message">Hi,
-
-Attached is my expense report for the ${escapeHtml(trip.client_name)} trip (${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)}), total ${fmtMoney(trip.total)}.
-
-Thanks!</textarea>
-        </label>
-        <button class="btn btn-primary" type="submit">Download PDF &amp; Open Email</button>
-      </form>
-    `);
-
-    modal.querySelector("[data-close]").addEventListener("click", () => modal.remove());
-
-    modal.querySelector("#report-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const errorBox = modal.querySelector("#report-error");
-      errorBox.innerHTML = "";
-      const fd = new FormData(e.target);
-      const payload = Object.fromEntries(fd.entries());
-
-      const restore = setBusy(e.target.querySelector('button[type=submit]'), "Preparing…");
-      try {
-        const filename = await downloadReport(trip);
-        await api(`/api/trips/${trip.id}/report/log`, {
-          method: "POST",
-          json: { recipient_email: payload.recipient_email, recipient_name: payload.recipient_name },
-        });
-        const subject = `Expense Report: ${trip.client_name} (${trip.start_date} to ${trip.end_date})`;
-        const body = payload.message + `\n\n(Remember to attach ${filename} — it just downloaded to your device.)`;
-        const mailto = `mailto:${encodeURIComponent(payload.recipient_email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        modal.remove();
-        window.location.href = mailto;
-        renderTripDetail(trip.id);
-      } catch (err) {
-        errorBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
-        restore();
-      }
-    });
   }
 
   render();

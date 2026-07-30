@@ -595,27 +595,6 @@ def trip_report(trip_id):
     return send_file(pdf_buffer, mimetype="application/pdf", as_attachment=True, download_name=filename)
 
 
-@app.route("/api/trips/<int:trip_id>/report/log", methods=["POST"])
-@require_auth
-def log_report(trip_id):
-    db = get_db()
-    trip = get_owned_trip(db, trip_id, g.user["id"])
-    if not trip:
-        db.close()
-        return jsonify({"error": "Trip not found"}), 404
-
-    data = request.get_json(force=True) or {}
-    recipient_email = (data.get("recipient_email") or "").strip()
-    recipient_name = (data.get("recipient_name") or "").strip()
-
-    db.execute(
-        "INSERT INTO report_log (trip_id, recipient_email, recipient_name, sent_at) VALUES (?, ?, ?, ?)",
-        (trip_id, recipient_email, recipient_name, now_iso()),
-    )
-    db.execute("UPDATE trips SET status = 'submitted' WHERE id = ?", (trip_id,))
-    db.commit()
-    db.close()
-    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
