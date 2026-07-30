@@ -353,7 +353,7 @@ button {
   .modal-backdrop { align-items: center; }
 }
 .modal {
-  background: white;
+  background: var(--card);
   border-radius: 16px 16px 0 0;
   padding: 20px;
   width: 100%;
@@ -441,7 +441,24 @@ button {
     --border: #1f2937;
     --text: #e5e7eb;
     --text-muted: #94a3b8;
+    --green-bg: rgba(22, 163, 74, 0.16);
+    --red-bg: rgba(220, 38, 38, 0.16);
+    --amber-bg: rgba(217, 119, 6, 0.18);
   }
   input, select, textarea { background: #1f2937; color: var(--text); border-color: #334155; }
   .btn-outline { background: #111827; }
+
+  /* These badges/boxes use solid light tints in light mode (readable dark
+     text on a pale background) -- in dark mode the same light backgrounds
+     would look like bright cutouts against the dark UI, so swap to
+     semi-transparent tints of the same accent color instead, and brighten
+     the accent colors themselves a bit for contrast against a dark card. */
+  .rules-col.covered h4, .status-submitted, .success-msg { color: #4ade80; }
+  .rules-col.not-covered h4, .flag-badge, .error-msg, .btn-danger { color: #f87171; }
+  .status-draft { color: #fbbf24; }
+  .rules-col.covered { border-color: rgba(22, 163, 74, 0.35); }
+  .rules-col.not-covered { border-color: rgba(220, 38, 38, 0.35); }
+  .success-msg { border-color: rgba(22, 163, 74, 0.35); }
+  .error-msg { border-color: rgba(220, 38, 38, 0.35); }
+  .btn-danger { border-color: rgba(220, 38, 38, 0.35); }
 }
