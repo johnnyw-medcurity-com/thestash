@@ -628,8 +628,12 @@
       const errorBox = modal.querySelector("#expense-error");
       errorBox.innerHTML = "";
       const fd = new FormData(form);
-      if (!form.querySelector('input[name="flagged"]').checked) fd.delete("flagged");
-      else fd.set("flagged", "1");
+      // An unchecked checkbox submits no value at all, which is fine for
+      // create (absent = default false) but breaks edit's partial-update:
+      // the server only touches fields it receives, so omitting "flagged"
+      // when unchecking it left the previous true value untouched. Always
+      // send an explicit 0/1 so unchecking actually clears it.
+      fd.set("flagged", form.querySelector('input[name="flagged"]').checked ? "1" : "0");
       const fileInput = form.querySelector('input[name="receipt"]');
       if (!fileInput.files.length) fd.delete("receipt");
 
