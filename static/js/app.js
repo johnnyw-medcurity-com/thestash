@@ -23,7 +23,12 @@
       opts.body = form; // FormData, browser sets content-type
     }
     const res = await fetch(path, opts);
-    if (res.status === 401) {
+    if (res.status === 401 && state.token) {
+      // Only an already-logged-in session expiring counts as "please log in
+      // again" — a 401 from /api/login or /api/register itself (no token was
+      // ever attached) just means the credentials were wrong, and should be
+      // shown as a normal form error instead of forcing a logout + re-render
+      // that would blow away the error box before it can display anything.
       logout();
       throw new Error("Session expired. Please log in again.");
     }
