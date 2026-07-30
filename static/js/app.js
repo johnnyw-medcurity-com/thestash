@@ -361,6 +361,9 @@
         <p class="muted" style="margin:2px 0 0">${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)}</p>
         <div class="divider"></div>
         <div class="total-bar"><span>Total</span><span>${fmtMoney(trip.total)}</span></div>
+        <button class="btn btn-outline btn-sm" data-action="toggle-status" style="margin-top:10px;">
+          ${trip.status === "submitted" ? "Mark as Draft" : "Mark as Submitted"}
+        </button>
       </div>
 
       <details class="card" style="padding-bottom:6px;">
@@ -465,6 +468,17 @@
       }
     });
     root.querySelector('[data-action="delete-trip"]').addEventListener("click", (e) => deleteTrip(trip.id, e.currentTarget));
+    root.querySelector('[data-action="toggle-status"]').addEventListener("click", async (e) => {
+      const newStatus = trip.status === "submitted" ? "draft" : "submitted";
+      const restore = setBusy(e.currentTarget, "Updating…");
+      try {
+        await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
+        renderTripDetail(trip.id);
+      } catch (err) {
+        alert("Could not update status: " + err.message);
+        restore();
+      }
+    });
     root.querySelectorAll('[data-action="view-receipt"]').forEach((img) => {
       img.addEventListener("click", () => openReceiptLightbox(img.dataset.src));
     });
