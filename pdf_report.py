@@ -29,6 +29,10 @@ RECEIPT_CELL_WIDTH = 2.9 * inch
 RECEIPT_CELL_MAX_HEIGHT = 3.4 * inch
 
 
+def _xml_escape(text):
+    return str(text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _fmt_money(amount):
     return f"${amount:,.2f}"
 
@@ -87,6 +91,10 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
     warn_style = ParagraphStyle(
         "WarnStyle", parent=styles["Normal"], fontSize=9, textColor=RED
     )
+    cell_style = ParagraphStyle(
+        "CellStyle", parent=styles["Normal"], fontSize=9, leading=11, textColor=colors.HexColor("#0f172a")
+    )
+    cell_style_flagged = ParagraphStyle("CellStyleFlagged", parent=cell_style, textColor=RED)
 
     story = []
     story.append(Paragraph("Travel Expense Report", title_style))
@@ -131,13 +139,14 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
         note = exp["notes"] or ""
         if exp["flagged"]:
             note = ("⚠ " + note).strip()
+        note_style = cell_style_flagged if exp["flagged"] else cell_style
         rows.append(
             [
                 _fmt_date(exp["date"]),
-                exp["category"],
-                exp["vendor"] or "",
+                Paragraph(_xml_escape(exp["category"]), cell_style),
+                Paragraph(_xml_escape(exp["vendor"] or ""), cell_style),
                 _fmt_money(amount),
-                note,
+                Paragraph(_xml_escape(note), note_style),
             ]
         )
         if exp["flagged"]:
@@ -156,9 +165,6 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]
-    for i, exp in enumerate(expenses, start=1):
-        if exp["flagged"]:
-            style_cmds.append(("TEXTCOLOR", (4, i), (4, i), RED))
     table.setStyle(TableStyle(style_cmds))
     story.append(table)
 
@@ -203,10 +209,10 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
             flag_rows.append(
                 [
                     _fmt_date(exp["date"]),
-                    exp["category"],
-                    exp["vendor"] or "",
+                    Paragraph(_xml_escape(exp["category"]), cell_style),
+                    Paragraph(_xml_escape(exp["vendor"] or ""), cell_style),
                     _fmt_money(exp["amount"] or 0.0),
-                    exp["notes"] or "",
+                    Paragraph(_xml_escape(exp["notes"] or ""), cell_style),
                 ]
             )
         flag_table = Table(flag_rows, colWidths=[0.9 * inch, 1.7 * inch, 1.3 * inch, 0.8 * inch, 1.6 * inch])
@@ -238,7 +244,7 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
         story.append(
             Paragraph(
                 "Missing receipts for: "
-                + ", ".join(f"{_fmt_date(e['date'])} {e['vendor'] or e['category']}" for e in receipts_missing),
+                + ", ".join(f"{_fmt_date(e['date'])} {_xml_escape(e['vendor'] or e['category'])}" for e in receipts_missing),
                 warn_style,
             )
         )
@@ -256,7 +262,8 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
             filename = exp["receipt_filename"]
             path = Path(upload_dir) / filename
             ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-            caption = f"{_fmt_date(exp['date'])} &mdash; {exp['vendor'] or exp['category']} &mdash; {_fmt_money(exp['amount'] or 0.0)}"
+            vendor_or_category = _xml_escape(exp["vendor"] or exp["category"])
+            caption = f"{_fmt_date(exp['date'])} &mdash; {vendor_or_category} &mdash; {_fmt_money(exp['amount'] or 0.0)}"
             if not path.exists() or ext not in RECEIPT_IMAGE_EXTENSIONS:
                 cells.append([Paragraph(caption, caption_style), Paragraph("<i>(receipt on file, not shown here)</i>", caption_style)])
             else:
