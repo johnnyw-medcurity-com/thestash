@@ -276,6 +276,23 @@ button {
   border: 1px solid var(--border);
 }
 
+.receipt-preview-wrap {
+  text-align: center;
+}
+.receipt-preview-img {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: inline-block;
+}
+.receipt-preview-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 .expense-actions {
   display: flex;
   gap: 6px;

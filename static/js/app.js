@@ -552,9 +552,10 @@
         <label>Receipt photo
           <input type="file" id="receipt-input" name="receipt" accept="image/*,application/pdf" capture="environment">
         </label>
+        <div id="receipt-preview-container"></div>
         <div id="receipt-status" class="muted" style="margin-top:-6px;"></div>
         <div id="receipt-raw-text"></div>
-        ${existing && existing.receipt_filename ? `<p class="muted">A receipt is already attached. Choosing a new file replaces it.</p>` : ""}
+        ${existing && existing.receipt_filename ? `<p class="muted">Choosing a new file replaces the attached receipt.</p>` : ""}
         <button class="btn btn-primary" type="submit">${isEdit ? "Save Changes" : "Add Expense"}</button>
       </form>
     `);
@@ -573,9 +574,45 @@
     const receiptInput = form.querySelector("#receipt-input");
     const receiptStatus = form.querySelector("#receipt-status");
     const receiptRawText = form.querySelector("#receipt-raw-text");
+    const receiptPreviewContainer = form.querySelector("#receipt-preview-container");
+    let previewObjectUrl = null;
+
+    // Revoke the blob URL whenever this modal goes away, regardless of which
+    // of its several close paths (X button, backdrop tap, successful save)
+    // triggered it.
+    const cleanupObserver = new MutationObserver(() => {
+      if (!document.body.contains(modal)) {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        cleanupObserver.disconnect();
+      }
+    });
+    cleanupObserver.observe(document.body, { childList: true });
+
+    function showReceiptPreview(src) {
+      receiptPreviewContainer.innerHTML = `
+        <div class="receipt-preview-wrap">
+          <img class="receipt-preview-img" src="${src}" alt="Receipt preview">
+          <div class="receipt-preview-hint">Tap the photo to view it larger</div>
+        </div>`;
+      receiptPreviewContainer.querySelector("img").addEventListener("click", () => openReceiptLightbox(src));
+    }
+
+    if (existing && existing.receipt_filename) {
+      showReceiptPreview(`/uploads/${encodeURIComponent(existing.receipt_filename)}?token=${encodeURIComponent(state.token)}`);
+    }
+
     receiptInput.addEventListener("change", async () => {
       const file = receiptInput.files[0];
       if (!file) return;
+
+      // Show the photo itself immediately -- don't wait on the OCR call --
+      // so there's always something to check the auto-filled fields against.
+      if (file.type.startsWith("image/")) {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = URL.createObjectURL(file);
+        showReceiptPreview(previewObjectUrl);
+      }
+
       receiptStatus.textContent = "Reading receipt…";
       receiptRawText.innerHTML = "";
       try {
