@@ -3,7 +3,7 @@ from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -27,6 +27,12 @@ LIGHT_GRAY = colors.HexColor("#f1f5f9")
 RECEIPT_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 RECEIPT_CELL_WIDTH = 2.9 * inch
 RECEIPT_CELL_MAX_HEIGHT = 3.4 * inch
+# A full-resolution phone photo (often several MB) only needs to look sharp
+# at the couple-inch size it's actually displayed at in the PDF. Downscaling
+# to this DPI and re-encoding as JPEG keeps a report with several receipts
+# from ballooning into the tens of MB.
+RECEIPT_TARGET_DPI = 150
+RECEIPT_JPEG_QUALITY = 80
 
 
 def _xml_escape(text):
@@ -49,19 +55,37 @@ def _fmt_date(value):
 def _build_receipt_cell(path, caption_text, caption_style):
     try:
         with PILImage.open(path) as im:
+            im = ImageOps.exif_transpose(im)  # respect phone camera rotation
             width_px, height_px = im.size
+
+            aspect = (height_px / width_px) if width_px else 1
+            img_width = RECEIPT_CELL_WIDTH
+            img_height = img_width * aspect
+            if img_height > RECEIPT_CELL_MAX_HEIGHT:
+                img_height = RECEIPT_CELL_MAX_HEIGHT
+                img_width = img_height / aspect
+
+            # Downscale to what this display size actually needs, and
+            # re-encode as a moderate-quality JPEG, so a multi-MB phone
+            # photo doesn't get embedded at full resolution just to be
+            # shown at ~3 inches.
+            target_px_w = max(1, round((img_width / inch) * RECEIPT_TARGET_DPI))
+            target_px_h = max(1, round((img_height / inch) * RECEIPT_TARGET_DPI))
+            if width_px > target_px_w or height_px > target_px_h:
+                im = im.copy()
+                im.thumbnail((target_px_w, target_px_h), PILImage.Resampling.LANCZOS)
+
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG", quality=RECEIPT_JPEG_QUALITY, optimize=True)
+            buf.seek(0)
     except Exception:
         return [Paragraph(caption_text, caption_style), Paragraph("<i>(receipt image could not be loaded)</i>", caption_style)]
 
-    aspect = (height_px / width_px) if width_px else 1
-    img_width = RECEIPT_CELL_WIDTH
-    img_height = img_width * aspect
-    if img_height > RECEIPT_CELL_MAX_HEIGHT:
-        img_height = RECEIPT_CELL_MAX_HEIGHT
-        img_width = img_height / aspect
-
     try:
-        rl_img = RLImage(str(path), width=img_width, height=img_height)
+        rl_img = RLImage(buf, width=img_width, height=img_height)
     except Exception:
         return [Paragraph(caption_text, caption_style), Paragraph("<i>(receipt image could not be loaded)</i>", caption_style)]
 
