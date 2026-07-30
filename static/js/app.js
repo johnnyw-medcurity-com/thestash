@@ -108,6 +108,24 @@
 
   // ---------------- Helpers ----------------
 
+  // Disables a button and swaps in a spinner + busy label while an async
+  // action runs, so the app never looks like a tap didn't register. Returns
+  // a restore function to call in a `finally` block.
+  function setBusy(button, busyLabel) {
+    if (!button || button.dataset.busy === "1") return () => {};
+    button.dataset.busy = "1";
+    button.dataset.originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `<span class="btn-spinner"></span>${escapeHtml(busyLabel)}`;
+    return () => {
+      if (button.dataset.busy !== "1") return;
+      button.disabled = false;
+      button.innerHTML = button.dataset.originalHtml;
+      delete button.dataset.busy;
+      delete button.dataset.originalHtml;
+    };
+  }
+
   function escapeHtml(str) {
     return String(str ?? "").replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -199,12 +217,14 @@
       const payload = Object.fromEntries(fd.entries());
       const errorBox = APP.querySelector("#auth-error");
       errorBox.innerHTML = "";
+      const restore = setBusy(e.target.querySelector('button[type=submit]'), isLogin ? "Logging in…" : "Signing up…");
       try {
         const data = await api(isLogin ? "/api/login" : "/api/register", { method: "POST", json: payload });
         saveSession(data.token, data.user);
         navigate("#/dashboard");
       } catch (err) {
         errorBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+        restore();
       }
     });
   }
@@ -293,6 +313,7 @@
       const payload = Object.fromEntries(fd.entries());
       const errorBox = APP.querySelector("#trip-error");
       errorBox.innerHTML = "";
+      const restore = setBusy(e.target.querySelector('button[type=submit]'), "Creating…");
       try {
         const client = await api("/api/clients", { method: "POST", json: { name: payload.client_name.trim() } });
         state.clients = [];
@@ -308,6 +329,7 @@
         navigate("#/trips/" + trip.id);
       } catch (err) {
         errorBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+        restore();
       }
     });
   }
@@ -433,9 +455,18 @@
 
   function bindTripDetailEvents(root, trip) {
     root.querySelector('[data-action="add-expense"]').addEventListener("click", () => openExpenseModal(trip.id));
-    root.querySelector('[data-action="download-report"]').addEventListener("click", () => downloadReport(trip));
+    root.querySelector('[data-action="download-report"]').addEventListener("click", async (e) => {
+      const restore = setBusy(e.currentTarget, "Generating…");
+      try {
+        await downloadReport(trip);
+      } catch (err) {
+        alert("Could not generate the report: " + err.message);
+      } finally {
+        restore();
+      }
+    });
     root.querySelector('[data-action="send-report"]').addEventListener("click", () => openSendReportModal(trip));
-    root.querySelector('[data-action="delete-trip"]').addEventListener("click", () => deleteTrip(trip.id));
+    root.querySelector('[data-action="delete-trip"]').addEventListener("click", (e) => deleteTrip(trip.id, e.currentTarget));
     root.querySelectorAll('[data-action="view-receipt"]').forEach((img) => {
       img.addEventListener("click", () => openReceiptLightbox(img.dataset.src));
     });
@@ -447,20 +478,32 @@
       });
     });
     root.querySelectorAll('[data-action="delete-expense"]').forEach((btn) => {
-      btn.addEventListener("click", () => deleteExpense(btn.dataset.id, trip.id));
+      btn.addEventListener("click", (e) => deleteExpense(btn.dataset.id, trip.id, e.currentTarget));
     });
   }
 
-  async function deleteTrip(tripId) {
+  async function deleteTrip(tripId, button) {
     if (!confirm("Delete this trip and all its expenses? This can't be undone.")) return;
-    await api(`/api/trips/${tripId}`, { method: "DELETE" });
-    navigate("#/dashboard");
+    const restore = setBusy(button, "Deleting…");
+    try {
+      await api(`/api/trips/${tripId}`, { method: "DELETE" });
+      navigate("#/dashboard");
+    } catch (err) {
+      alert("Could not delete this trip: " + err.message);
+      restore();
+    }
   }
 
-  async function deleteExpense(expenseId, tripId) {
+  async function deleteExpense(expenseId, tripId, button) {
     if (!confirm("Delete this expense?")) return;
-    await api(`/api/expenses/${expenseId}`, { method: "DELETE" });
-    renderTripDetail(tripId);
+    const restore = setBusy(button, "Deleting…");
+    try {
+      await api(`/api/expenses/${expenseId}`, { method: "DELETE" });
+      renderTripDetail(tripId);
+    } catch (err) {
+      alert("Could not delete this expense: " + err.message);
+      restore();
+    }
   }
 
   // ---------------- Expense modal ----------------
@@ -590,6 +633,7 @@
       const fileInput = form.querySelector('input[name="receipt"]');
       if (!fileInput.files.length) fd.delete("receipt");
 
+      const restore = setBusy(form.querySelector('button[type=submit]'), isEdit ? "Saving…" : "Adding…");
       try {
         if (isEdit) {
           await api(`/api/expenses/${existing.id}`, { method: "PATCH", form: fd });
@@ -600,6 +644,7 @@
         renderTripDetail(tripId);
       } catch (err) {
         errorBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+        restore();
       }
     });
   }
@@ -656,6 +701,7 @@ Thanks!</textarea>
       const fd = new FormData(e.target);
       const payload = Object.fromEntries(fd.entries());
 
+      const restore = setBusy(e.target.querySelector('button[type=submit]'), "Preparing…");
       try {
         const filename = await downloadReport(trip);
         await api(`/api/trips/${trip.id}/report/log`, {
@@ -670,6 +716,7 @@ Thanks!</textarea>
         renderTripDetail(trip.id);
       } catch (err) {
         errorBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+        restore();
       }
     });
   }
