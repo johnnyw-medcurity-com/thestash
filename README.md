@@ -14,10 +14,14 @@ sending an expense report (PDF) to whoever needs to review or reimburse it.
   anything out (blurry photo, unusual layout, or running somewhere without Tesseract
   installed), the fields are just left blank for manual entry instead of erroring out.
 - Categories mirror the covered/not-covered expense policy (flights, lodging, rental
-  car/mileage, meals, parking/tolls/transportation, other direct trip costs). Anything
+  car, meals, fuel, parking/tolls/transportation, other direct trip costs). Anything
   that doesn't clearly fit — including anything the receipt scanner can't confidently
   categorize — gets logged as "Other (Needs Review)" or flagged manually so nothing
   gets silently guessed at.
+- "Mileage (Personal Vehicle)" is its own category for driving your own car on a
+  trip: enter miles driven instead of a dollar amount, and the app computes the
+  reimbursed amount at $0.725/mile (set in `categories.py`) — always recalculated
+  server-side so it can't drift from the rate.
 - Each trip can generate a PDF expense report (itemized table, subtotals by category,
   grand total, and a flagged-for-review section) and download it on demand.
 - "Send Report" downloads the PDF and opens a pre-filled email draft in your own mail
