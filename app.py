@@ -515,7 +515,7 @@ def trip_report(trip_id):
     ).fetchall()
     db.close()
 
-    pdf_buffer = build_trip_pdf(trip, trip["client_name"], g.user["name"], g.user["email"], expenses)
+    pdf_buffer = build_trip_pdf(trip, trip["client_name"], g.user["name"], g.user["email"], expenses, upload_dir=UPLOAD_DIR)
     safe_client = secure_filename(trip["client_name"] or "trip") or "trip"
     filename = f"expense-report-{safe_client}-{trip['start_date']}.pdf"
     return send_file(pdf_buffer, mimetype="application/pdf", as_attachment=True, download_name=filename)

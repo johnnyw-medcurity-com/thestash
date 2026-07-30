@@ -390,7 +390,7 @@
     return `
       <div class="expense-row" data-expense-id="${exp.id}">
         ${exp.receipt_filename
-          ? `<img class="receipt-thumb" src="/uploads/${encodeURIComponent(exp.receipt_filename)}?token=${encodeURIComponent(state.token)}" alt="Receipt">`
+          ? `<img class="receipt-thumb" data-action="view-receipt" data-src="/uploads/${encodeURIComponent(exp.receipt_filename)}?token=${encodeURIComponent(state.token)}" src="/uploads/${encodeURIComponent(exp.receipt_filename)}?token=${encodeURIComponent(state.token)}" alt="Receipt" style="cursor:pointer;" title="Tap to view full size">`
           : `<div class="receipt-thumb" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;">no<br>receipt</div>`}
         <div class="expense-main" style="flex:1;">
           <div class="cat">${escapeHtml(exp.category)}${exp.flagged ? `<span class="flag-badge">FLAGGED</span>` : ""}</div>
@@ -410,11 +410,30 @@
     return opts.map((c) => `<option value="${escapeHtml(c)}" ${c === selected ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
   }
 
+  function openReceiptLightbox(src) {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.style.alignItems = "center";
+    backdrop.innerHTML = `
+      <div style="position:relative; max-width:94vw; max-height:94vh;">
+        <button data-lightbox-close aria-label="Close" style="position:absolute; top:-14px; right:-14px; width:36px; height:36px; border-radius:50%; background:white; border:1px solid var(--border); font-size:20px; line-height:1; color:var(--navy); cursor:pointer;">&times;</button>
+        <img src="${src}" style="max-width:94vw; max-height:94vh; border-radius:8px; display:block; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+      </div>`;
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) backdrop.remove();
+    });
+    backdrop.querySelector("[data-lightbox-close]").addEventListener("click", () => backdrop.remove());
+    document.body.appendChild(backdrop);
+  }
+
   function bindTripDetailEvents(root, trip) {
     root.querySelector('[data-action="add-expense"]').addEventListener("click", () => openExpenseModal(trip.id));
     root.querySelector('[data-action="download-report"]').addEventListener("click", () => downloadReport(trip));
     root.querySelector('[data-action="send-report"]').addEventListener("click", () => openSendReportModal(trip));
     root.querySelector('[data-action="delete-trip"]').addEventListener("click", () => deleteTrip(trip.id));
+    root.querySelectorAll('[data-action="view-receipt"]').forEach((img) => {
+      img.addEventListener("click", () => openReceiptLightbox(img.dataset.src));
+    });
 
     root.querySelectorAll('[data-action="edit-expense"]').forEach((btn) => {
       btn.addEventListener("click", () => {

@@ -1,7 +1,9 @@
 import io
 from collections import OrderedDict
 from datetime import datetime
+from pathlib import Path
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -12,6 +14,8 @@ from reportlab.platypus import (
     TableStyle,
     Paragraph,
     Spacer,
+    Image as RLImage,
+    PageBreak,
 )
 
 from categories import NEEDS_REVIEW_CATEGORY
@@ -19,6 +23,10 @@ from categories import NEEDS_REVIEW_CATEGORY
 NAVY = colors.HexColor("#1e293b")
 RED = colors.HexColor("#dc2626")
 LIGHT_GRAY = colors.HexColor("#f1f5f9")
+
+RECEIPT_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+RECEIPT_CELL_WIDTH = 2.9 * inch
+RECEIPT_CELL_MAX_HEIGHT = 3.4 * inch
 
 
 def _fmt_money(amount):
@@ -34,7 +42,29 @@ def _fmt_date(value):
         return value
 
 
-def build_trip_pdf(trip, client_name, user_name, user_email, expenses):
+def _build_receipt_cell(path, caption_text, caption_style):
+    try:
+        with PILImage.open(path) as im:
+            width_px, height_px = im.size
+    except Exception:
+        return [Paragraph(caption_text, caption_style), Paragraph("<i>(receipt image could not be loaded)</i>", caption_style)]
+
+    aspect = (height_px / width_px) if width_px else 1
+    img_width = RECEIPT_CELL_WIDTH
+    img_height = img_width * aspect
+    if img_height > RECEIPT_CELL_MAX_HEIGHT:
+        img_height = RECEIPT_CELL_MAX_HEIGHT
+        img_width = img_height / aspect
+
+    try:
+        rl_img = RLImage(str(path), width=img_width, height=img_height)
+    except Exception:
+        return [Paragraph(caption_text, caption_style), Paragraph("<i>(receipt image could not be loaded)</i>", caption_style)]
+
+    return [rl_img, Spacer(1, 4), Paragraph(caption_text, caption_style)]
+
+
+def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_dir=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -212,6 +242,46 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses):
                 warn_style,
             )
         )
+
+    receipt_expenses = [e for e in expenses if e["receipt_filename"]]
+    if receipt_expenses and upload_dir:
+        story.append(PageBreak())
+        story.append(Paragraph("Receipt Images", section_style))
+        caption_style = ParagraphStyle(
+            "ReceiptCaption", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#475569")
+        )
+
+        cells = []
+        for exp in receipt_expenses:
+            filename = exp["receipt_filename"]
+            path = Path(upload_dir) / filename
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            caption = f"{_fmt_date(exp['date'])} &mdash; {exp['vendor'] or exp['category']} &mdash; {_fmt_money(exp['amount'] or 0.0)}"
+            if not path.exists() or ext not in RECEIPT_IMAGE_EXTENSIONS:
+                cells.append([Paragraph(caption, caption_style), Paragraph("<i>(receipt on file, not shown here)</i>", caption_style)])
+            else:
+                cells.append(_build_receipt_cell(path, caption, caption_style))
+
+        rows = []
+        for i in range(0, len(cells), 2):
+            row = cells[i:i + 2]
+            if len(row) == 1:
+                row.append("")
+            rows.append(row)
+
+        receipts_table = Table(rows, colWidths=[3.3 * inch, 3.3 * inch])
+        receipts_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ]
+            )
+        )
+        story.append(receipts_table)
 
     doc.build(story)
     buffer.seek(0)
