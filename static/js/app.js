@@ -389,12 +389,13 @@
       </details>
 
       <div class="card">
-        <div class="row1" style="margin-bottom:8px;">
-          <h3 style="margin:0;">Expenses (${expenses.length})</h3>
+        <h3 style="margin:0 0 8px;">Expenses (${expenses.length})</h3>
+        <div class="inline-row">
           <button class="btn btn-primary btn-sm" data-action="add-expense">📷 Add from receipt</button>
+          <button class="btn btn-outline btn-sm" data-action="add-expense-manual">✏️ Add manually</button>
         </div>
         ${expenses.length === 0
-          ? `<p class="muted">No expenses logged yet. Tap the button above, snap the receipt, and the date/vendor/amount/category get filled in for you to confirm.</p>`
+          ? `<p class="muted" style="margin-top:8px;">Snap a receipt and the date/vendor/amount/category get filled in for you to confirm — or add an expense manually, handy for things like personal-car mileage that don't have a receipt.</p>`
           : `<div id="expense-list">${expenses.map(expenseRowHtml).join("")}</div>`}
       </div>
 
@@ -455,6 +456,7 @@
 
   function bindTripDetailEvents(root, trip) {
     root.querySelector('[data-action="add-expense"]').addEventListener("click", () => openExpenseModal(trip.id));
+    root.querySelector('[data-action="add-expense-manual"]').addEventListener("click", () => openExpenseModal(trip.id, null, { openPhotoPicker: false }));
     root.querySelector('[data-action="download-report"]').addEventListener("click", async (e) => {
       const restore = setBusy(e.currentTarget, "Generating…");
       try {
@@ -519,7 +521,7 @@
     return backdrop;
   }
 
-  function openExpenseModal(tripId, existing) {
+  function openExpenseModal(tripId, existing, { openPhotoPicker = true } = {}) {
     const isEdit = !!existing;
     const modal = openModal(`
       <div class="modal-header">
@@ -689,7 +691,7 @@
       }
     });
 
-    if (!isEdit) {
+    if (!isEdit && openPhotoPicker) {
       receiptInput.click();
     }
 
