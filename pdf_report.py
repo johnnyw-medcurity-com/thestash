@@ -25,14 +25,21 @@ RED = colors.HexColor("#dc2626")
 LIGHT_GRAY = colors.HexColor("#f1f5f9")
 
 RECEIPT_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
-RECEIPT_CELL_WIDTH = 2.9 * inch
-RECEIPT_CELL_MAX_HEIGHT = 3.4 * inch
+# One receipt per row at close to full page width, rather than two small
+# side-by-side cells. A narrow strip receipt is limited by the height cap
+# either way, so it doesn't change much -- but a dense, full-page document
+# (e.g. a full 8x10 hotel folio) was losing most of its readability being
+# squeezed into a ~2.9" cell; at full width it gets roughly double the
+# linear size, which is the difference that actually matters for legibility.
+RECEIPT_CELL_WIDTH = 6.8 * inch
+RECEIPT_CELL_MAX_HEIGHT = 8.0 * inch
 # A full-resolution phone photo (often several MB) only needs to look sharp
-# at the couple-inch size it's actually displayed at in the PDF. Downscaling
-# to this DPI and re-encoding as JPEG keeps a report with several receipts
-# from ballooning into the tens of MB.
-RECEIPT_TARGET_DPI = 150
-RECEIPT_JPEG_QUALITY = 80
+# at the size it's actually displayed at in the PDF. Downscaling to this DPI
+# and re-encoding as JPEG keeps a report with several receipts from
+# ballooning into the tens of MB. Comfortably raised from 150 after
+# confirming file size stays tiny even at full page width.
+RECEIPT_TARGET_DPI = 200
+RECEIPT_JPEG_QUALITY = 82
 
 
 def _xml_escape(text):
@@ -86,6 +93,7 @@ def _build_receipt_cell(path, caption_text, caption_style):
 
     try:
         rl_img = RLImage(buf, width=img_width, height=img_height)
+        rl_img.hAlign = "CENTER"
     except Exception:
         return [Paragraph(caption_text, caption_style), Paragraph("<i>(receipt image could not be loaded)</i>", caption_style)]
 
@@ -278,10 +286,9 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
         story.append(PageBreak())
         story.append(Paragraph("Receipt Images", section_style))
         caption_style = ParagraphStyle(
-            "ReceiptCaption", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#475569")
+            "ReceiptCaption", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#475569"), alignment=1
         )
 
-        cells = []
         for exp in receipt_expenses:
             filename = exp["receipt_filename"]
             path = Path(upload_dir) / filename
@@ -289,30 +296,11 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
             vendor_or_category = _xml_escape(exp["vendor"] or exp["category"])
             caption = f"{_fmt_date(exp['date'])} &mdash; {vendor_or_category} &mdash; {_fmt_money(exp['amount'] or 0.0)}"
             if not path.exists() or ext not in RECEIPT_IMAGE_EXTENSIONS:
-                cells.append([Paragraph(caption, caption_style), Paragraph("<i>(receipt on file, not shown here)</i>", caption_style)])
+                story.append(Paragraph(caption, caption_style))
+                story.append(Paragraph("<i>(receipt on file, not shown here)</i>", caption_style))
             else:
-                cells.append(_build_receipt_cell(path, caption, caption_style))
-
-        rows = []
-        for i in range(0, len(cells), 2):
-            row = cells[i:i + 2]
-            if len(row) == 1:
-                row.append("")
-            rows.append(row)
-
-        receipts_table = Table(rows, colWidths=[3.3 * inch, 3.3 * inch])
-        receipts_table.setStyle(
-            TableStyle(
-                [
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 10),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                ]
-            )
-        )
-        story.append(receipts_table)
+                story.extend(_build_receipt_cell(path, caption, caption_style))
+            story.append(Spacer(1, 18))
 
     doc.build(story)
     buffer.seek(0)
