@@ -134,7 +134,6 @@ def build_trip_pdf(trip, client_name, user_name, user_email, expenses, upload_di
         ["Employee:", f"{user_name} ({user_email})"],
         ["Trip Purpose:", trip["purpose"] or "—"],
         ["Dates:", f"{_fmt_date(trip['start_date'])} – {_fmt_date(trip['end_date'])}"],
-        ["Status:", (trip["status"] or "draft").title()],
         ["Generated:", datetime.now().strftime("%b %d, %Y %I:%M %p")],
     ]
     meta_table = Table(meta_rows, colWidths=[1.3 * inch, 5 * inch])
