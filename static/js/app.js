@@ -679,7 +679,7 @@
           filledAny = true;
         }
         if (result.amount) {
-          form.querySelector('input[name="amount"]').value = result.amount;
+          form.querySelector('input[name="amount"]').value = Number(result.amount).toFixed(2);
           filledAny = true;
         }
         if (result.category) {
