@@ -344,10 +344,11 @@ def parse_receipt():
         result = parse_receipt_image(file.stream)
 
     if not result.get("ocr_available"):
-        return jsonify({"ocr_available": False})
+        return jsonify({"ocr_available": False, "source": "none"})
 
     return jsonify({
         "ocr_available": True,
+        "source": result.get("source", "ocr"),
         "date": result.get("date"),
         "amount": result.get("amount"),
         "vendor": result.get("vendor"),

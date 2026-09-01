@@ -225,4 +225,5 @@ def parse_receipt_image(file_stream):
 
     result = extract_fields_from_text(text)
     result["ocr_available"] = True
+    result["source"] = "ocr"
     return result

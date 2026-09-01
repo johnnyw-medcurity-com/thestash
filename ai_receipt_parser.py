@@ -3,6 +3,8 @@ import io
 import json
 import os
 import re
+import sys
+import traceback
 
 from PIL import Image, ImageOps
 
@@ -57,19 +59,27 @@ def _extract_json(text):
 def parse_receipt_with_ai(file_stream):
     """Returns a dict matching the same contract as the Tesseract-based
     parser, or None if AI parsing isn't available/configured or fails for
-    any reason -- callers should fall back to the OCR-based parser."""
+    any reason -- callers should fall back to the OCR-based parser. Every
+    early-return logs why, to stderr (PythonAnywhere's error log), so a
+    misconfigured key or missing dependency doesn't look identical to
+    "AI just wasn't confident" -- see also the "source" field the caller
+    attaches to its response for a same-request, no-log-diving answer."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
+        print("[ai_receipt_parser] ANTHROPIC_API_KEY is not set -- falling back to OCR", file=sys.stderr)
         return None
 
     try:
         import anthropic
     except ImportError:
+        print("[ai_receipt_parser] 'anthropic' package not installed (pip install -r requirements.txt?) -- falling back to OCR", file=sys.stderr)
         return None
 
     try:
         image_b64 = _prepare_image(file_stream)
     except Exception:
+        print("[ai_receipt_parser] Failed to prepare/downscale the image:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         return None
 
     try:
@@ -90,11 +100,14 @@ def parse_receipt_with_ai(file_stream):
             }],
         )
     except Exception:
+        print("[ai_receipt_parser] API call failed:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         return None
 
     text = "".join(block.text for block in response.content if block.type == "text")
     data = _extract_json(text)
     if data is None:
+        print(f"[ai_receipt_parser] Could not find JSON in the model's response: {text[:500]!r}", file=sys.stderr)
         return None
 
     category = data.get("category")
@@ -117,6 +130,7 @@ def parse_receipt_with_ai(file_stream):
 
     return {
         "ocr_available": True,
+        "source": "ai",
         "date": date,
         "vendor": vendor,
         "amount": amount,

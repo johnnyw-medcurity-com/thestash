@@ -664,6 +664,7 @@
         const parseForm = new FormData();
         parseForm.append("receipt", file);
         const result = await api("/api/receipts/parse", { method: "POST", form: parseForm });
+        const methodLabel = result.source === "ai" ? "AI" : result.source === "ocr" ? "basic OCR" : "";
         if (!result.ocr_available) {
           receiptStatus.textContent = "Couldn't auto-read this receipt — fill in the details below.";
           return;
@@ -687,12 +688,12 @@
           filledAny = true;
         }
         receiptStatus.textContent = filledAny
-          ? "Filled in from the receipt — check it over and adjust anything that's wrong."
-          : "Couldn't make out the details on this receipt — fill them in below.";
+          ? `Filled in via ${methodLabel} — check it over and adjust anything that's wrong.`
+          : `${methodLabel} couldn't make out the details on this receipt — fill them in below.`;
         if (result.raw_text) {
           receiptRawText.innerHTML = `
             <details style="margin-top:6px;">
-              <summary class="muted" style="cursor:pointer;">What the scanner read</summary>
+              <summary class="muted" style="cursor:pointer;">What the ${methodLabel || "scanner"} read</summary>
               <pre style="white-space:pre-wrap; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px; margin-top:6px; max-height:200px; overflow-y:auto;">${escapeHtml(result.raw_text)}</pre>
             </details>`;
         }
