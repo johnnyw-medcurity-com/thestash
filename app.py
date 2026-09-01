@@ -17,6 +17,7 @@ from categories import (
 )
 from pdf_report import build_trip_pdf
 from receipt_parser import parse_receipt_image
+from ai_receipt_parser import parse_receipt_with_ai
 
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -334,7 +335,14 @@ def parse_receipt():
     if not allowed_file(file.filename):
         return jsonify({"error": "Unsupported receipt file type"}), 400
 
-    result = parse_receipt_image(file.stream)
+    # Try AI vision extraction first (far more accurate on real-world photos);
+    # fall back to the free Tesseract/heuristic parser if no API key is
+    # configured or the AI call fails for any reason.
+    result = parse_receipt_with_ai(file.stream)
+    if result is None:
+        file.stream.seek(0)
+        result = parse_receipt_image(file.stream)
+
     if not result.get("ocr_available"):
         return jsonify({"ocr_available": False})
 

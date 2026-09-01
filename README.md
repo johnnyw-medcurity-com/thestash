@@ -8,11 +8,13 @@ sending an expense report (PDF) to whoever needs to review or reimburse it.
 - Each person creates their own account and logs their own trips.
 - Every trip is tied to a client and has a start/end date and purpose.
 - Adding an expense is photo-first: tap "Add from receipt," the camera opens
-  immediately, and once you snap the photo the app OCRs it (via Tesseract) and
-  pre-fills the date, vendor, amount, and a guessed category. Every field stays
-  editable — glance it over, fix anything it misread, and save. If it can't make
-  anything out (blurry photo, unusual layout, or running somewhere without Tesseract
-  installed), the fields are just left blank for manual entry instead of erroring out.
+  immediately, and once you snap the photo Claude reads it and pre-fills the date,
+  vendor, amount, and a guessed category. Every field stays editable — glance it
+  over, fix anything it misread, and save. Needs an `ANTHROPIC_API_KEY` (see
+  "AI receipt reading" below); without one, or if a call fails, it automatically
+  falls back to free local OCR (Tesseract) with the same pre-fill behavior, just
+  less accurate on messy/crumpled photos. If neither is available, the fields are
+  just left blank for manual entry instead of erroring out.
 - Categories mirror the covered/not-covered expense policy (flights, lodging, rental
   car, meals, fuel, parking/tolls/transportation, other direct trip costs). Anything
   that doesn't clearly fit — including anything the receipt scanner can't confidently
@@ -36,6 +38,33 @@ Requires Python 3.9+ (already available on macOS).
 cd "/Users/johnnyw/Claude Code/travel expense"
 python3 -m pip install --user -r requirements.txt
 ```
+
+## AI receipt reading
+
+Receipt photos are read by Claude (`claude-sonnet-5`) for far more accurate results
+than plain OCR on real-world photos (crumpled receipts, glare, unusual layouts).
+This costs a small amount per receipt scanned — well under a cent each with this
+model, so even heavy use (hundreds of receipts a month) comes out to a dollar or
+two — billed to whatever Anthropic account owns the API key below.
+
+1. Create an account at [console.anthropic.com](https://console.anthropic.com) and
+   add billing (Settings → Billing). This is a real account with real (small) costs;
+   set it up yourself rather than sharing credentials with anyone else.
+2. Create an API key: Settings → API Keys → **Create Key**. Copy it — it's only
+   shown once.
+3. Set it as the `ANTHROPIC_API_KEY` environment variable wherever the app runs:
+   - **Locally:** `export ANTHROPIC_API_KEY=sk-ant-...` before running `python3 app.py`
+     (or put it in your shell profile).
+   - **PythonAnywhere:** on the **Web** tab, look for an **Environment variables**
+     section and add `ANTHROPIC_API_KEY` there if present. If your account doesn't
+     have that section, add this line near the top of your WSGI configuration file
+     instead (same file you edited during deploy setup), before the `from app import`
+     line: `os.environ['ANTHROPIC_API_KEY'] = 'sk-ant-...'` (and `import os` above
+     it) — then **Reload** the web app.
+
+Without a key set (or if a call to it fails for any reason — network issue, rate
+limit, etc.), the app automatically falls back to the free local OCR described
+below, so it never hard-fails on a missing key.
 
 ## Run
 
@@ -98,11 +127,12 @@ make the repo public first since it contains no secrets, `.gitignore` already ke
 database/receipts/secret key out of it, or generate a GitHub personal access token
 yourself and use it as the password when prompted.)
 
-Receipt photo auto-fill needs the `tesseract` OCR binary — PythonAnywhere already has
-it preinstalled system-wide, so no extra setup is needed there. (If you ever move this
-app to a different host, check that `tesseract` is installed and on `PATH`, or that
-host's package manager for how to add it — without it, the app still works fine, it
-just leaves the expense fields blank for manual entry instead of pre-filling them.)
+Set `ANTHROPIC_API_KEY` (see "AI receipt reading" above) for accurate receipt
+auto-fill. Its free fallback, the `tesseract` OCR binary, is already preinstalled
+on PythonAnywhere, so there's nothing extra to do for that part. (If you ever move
+this app to a different host, check that `tesseract` is installed and on `PATH` for
+the fallback to work there too — without either, the app still works fine, it just
+leaves the expense fields blank for manual entry instead of pre-filling them.)
 
 **3. Create the web app**: go to the **Web** tab → **Add a new web app** → when asked
 about the framework, choose **Manual configuration** (not the Flask wizard, since we
