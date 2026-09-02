@@ -194,7 +194,7 @@
                 <input type="text" name="name" autocomplete="name" required>
               </label>`}
               <label>Email
-                <input type="email" name="email" autocomplete="email" required>
+                <input type="email" name="email" autocomplete="email" placeholder="${isLogin ? "" : "you@medcurity.com"}" required>
               </label>
               <label>Password
                 <input type="password" name="password" autocomplete="${isLogin ? "current-password" : "new-password"}" minlength="6" required>

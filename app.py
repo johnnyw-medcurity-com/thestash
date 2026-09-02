@@ -24,6 +24,10 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "heic", "webp", "pdf"}
 MAX_CONTENT_LENGTH = 15 * 1024 * 1024  # 15 MB
+# Registration is restricted to this email domain -- this is a company tool,
+# not a public app, and the AI receipt parsing is billed to one shared API
+# key, so open signup is a real cost/data exposure, not just clutter.
+ALLOWED_EMAIL_DOMAIN = "medcurity.com"
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -100,6 +104,8 @@ def register():
         return jsonify({"error": "Name, email, and password are required"}), 400
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
+    if not email.endswith("@" + ALLOWED_EMAIL_DOMAIN):
+        return jsonify({"error": f"Only @{ALLOWED_EMAIL_DOMAIN} email addresses can create an account"}), 403
 
     db = get_db()
     existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
