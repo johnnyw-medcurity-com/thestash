@@ -18,6 +18,7 @@ from categories import (
 from pdf_report import build_trip_pdf
 from receipt_parser import parse_receipt_image
 from ai_receipt_parser import parse_receipt_with_ai
+from image_processing import downscale_receipt_image
 
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -41,6 +42,24 @@ def now_iso():
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def save_receipt_file(file):
+    """Saves an uploaded receipt to UPLOAD_DIR, downscaling it first when
+    it's a resizeable image format (most receipts) so a multi-MB phone
+    photo doesn't get stored at full size. Falls back to saving the
+    original bytes unchanged for formats that can't be downscaled (a PDF
+    receipt, or an image format Pillow can't decode). Returns the saved
+    filename."""
+    downscaled = downscale_receipt_image(file)
+    if downscaled is not None:
+        filename = f"{uuid.uuid4().hex}.jpg"
+        (UPLOAD_DIR / filename).write_bytes(downscaled)
+    else:
+        ext = secure_filename(file.filename).rsplit(".", 1)[1].lower()
+        filename = f"{uuid.uuid4().hex}.{ext}"
+        file.save(UPLOAD_DIR / filename)
+    return filename
 
 
 def user_public(user):
@@ -421,9 +440,7 @@ def create_expense(trip_id):
         if not allowed_file(file.filename):
             db.close()
             return jsonify({"error": "Unsupported receipt file type"}), 400
-        ext = secure_filename(file.filename).rsplit(".", 1)[1].lower()
-        receipt_filename = f"{uuid.uuid4().hex}.{ext}"
-        file.save(UPLOAD_DIR / receipt_filename)
+        receipt_filename = save_receipt_file(file)
 
     cur = db.execute(
         "INSERT INTO expenses (trip_id, date, category, vendor, amount, notes, flagged, receipt_filename, miles, created_at) "
@@ -501,9 +518,7 @@ def update_expense(expense_id):
             if not allowed_file(file.filename):
                 db.close()
                 return jsonify({"error": "Unsupported receipt file type"}), 400
-            ext = secure_filename(file.filename).rsplit(".", 1)[1].lower()
-            new_filename = f"{uuid.uuid4().hex}.{ext}"
-            file.save(UPLOAD_DIR / new_filename)
+            new_filename = save_receipt_file(file)
             old_path = UPLOAD_DIR / row["receipt_filename"] if row["receipt_filename"] else None
             if old_path and old_path.exists():
                 old_path.unlink()
