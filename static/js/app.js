@@ -442,11 +442,15 @@
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
     backdrop.style.alignItems = "center";
+    // The close button is fixed to the viewport corner rather than
+    // positioned relative to the image -- a tall receipt photo can fill
+    // (or, with a mobile browser's address bar eating into the real
+    // viewport height, exceed) the available height, which pushed a
+    // button anchored just above the image off-screen and unreachable.
     backdrop.innerHTML = `
-      <div style="position:relative; max-width:94vw; max-height:94vh;">
-        <button data-lightbox-close aria-label="Close" style="position:absolute; top:-14px; right:-14px; width:36px; height:36px; border-radius:50%; background:white; border:1px solid var(--border); font-size:20px; line-height:1; color:var(--navy); cursor:pointer;">&times;</button>
-        <img src="${src}" style="max-width:94vw; max-height:94vh; border-radius:8px; display:block; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
-      </div>`;
+      <button data-lightbox-close aria-label="Close" style="position:fixed; top:16px; right:16px; width:40px; height:40px; border-radius:50%; background:white; border:1px solid var(--border); font-size:22px; line-height:1; color:var(--navy); cursor:pointer; z-index:60; box-shadow:0 2px 8px rgba(0,0,0,0.35);">&times;</button>
+      <img src="${src}" style="max-width:94vw; max-height:88vh; border-radius:8px; display:block; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+    `;
     backdrop.addEventListener("click", (e) => {
       if (e.target === backdrop) backdrop.remove();
     });
