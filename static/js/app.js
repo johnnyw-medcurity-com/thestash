@@ -292,7 +292,7 @@
             <label>Trip purpose
               <input type="text" name="purpose" placeholder="e.g. HIPAA risk assessment on-site visit">
             </label>
-            <div class="inline-row">
+            <div class="inline-row date-row">
               <label>Start date
                 <input type="date" name="start_date" value="${todayISO()}" required>
               </label>
