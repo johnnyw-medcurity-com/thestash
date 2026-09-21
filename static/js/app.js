@@ -570,7 +570,7 @@
           <span>Flag for review &mdash; not sure this qualifies</span>
         </label>
         <label>Receipt photo
-          <input type="file" id="receipt-input" name="receipt" accept="image/*,application/pdf" capture="environment">
+          <input type="file" id="receipt-input" name="receipt" accept="image/*,application/pdf">
         </label>
         <div id="receipt-preview-container"></div>
         <div id="receipt-status" class="muted" style="margin-top:-6px;"></div>
