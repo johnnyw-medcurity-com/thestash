@@ -416,13 +416,14 @@
         <p class="muted" style="margin:2px 0 0">${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)}</p>
         <div class="divider"></div>
         <div class="total-bar"><span>Total</span><span>${fmtMoney(trip.total)}</span></div>
-        <div class="status-picker" style="margin-top:10px;">
+        <div class="status-stepper" style="margin-top:10px;">
           ${TRIP_STATUSES.map((s) => `
-            <button class="status-badge status-${s} ${trip.status === s ? "" : "status-inactive"}" data-action="set-status" data-status="${s}">
+            <button class="status-option ${trip.status === s ? "active status-option-" + s : ""}" data-action="set-status" data-status="${s}">
               ${s}
             </button>
           `).join("")}
         </div>
+        <div class="save-indicator" id="status-save-indicator"></div>
       </div>
 
       <details class="card" style="padding-bottom:6px;">
@@ -535,10 +536,26 @@
       btn.addEventListener("click", async () => {
         const newStatus = btn.dataset.status;
         if (newStatus === trip.status) return;
+        const stepper = btn.closest(".status-stepper");
         const restore = setBusy(btn, "…");
         try {
           await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
-          renderTripDetail(trip.id);
+          trip.status = newStatus;
+          restore();
+          // Patch the badge and stepper in place rather than re-rendering
+          // the whole screen, so the "Saved" confirmation below actually
+          // has a moment to be seen instead of being wiped out immediately.
+          const topBadge = root.querySelector(".card > .row1 .status-badge");
+          topBadge.className = `status-badge status-${newStatus}`;
+          topBadge.textContent = newStatus;
+          stepper.querySelectorAll(".status-option").forEach((optBtn) => {
+            optBtn.className = `status-option${optBtn.dataset.status === newStatus ? ` active status-option-${newStatus}` : ""}`;
+          });
+          const indicator = root.querySelector("#status-save-indicator");
+          indicator.textContent = "✓ Saved";
+          indicator.classList.add("visible");
+          clearTimeout(indicator._hideTimer);
+          indicator._hideTimer = setTimeout(() => indicator.classList.remove("visible"), 1500);
         } catch (err) {
           alert("Could not update status: " + err.message);
           restore();

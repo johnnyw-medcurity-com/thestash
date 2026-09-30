@@ -247,6 +247,49 @@ button {
   padding: 8px 6px;
   transition: opacity 0.15s;
 }
+
+/* Trip-detail status setter: a segmented control, not a row of pills --
+   the selected state should read as definite (a solid block of color),
+   with the other two clearly secondary (plain text, no color of their
+   own) rather than everything being a softer version of the same badge. */
+.status-stepper {
+  display: flex;
+  gap: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+}
+.status-option {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 9px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.status-option-draft.active { background: var(--amber); color: white; }
+.status-option-submitted.active { background: var(--green); color: white; }
+.status-option-reimbursed.active { background: var(--blue); color: white; }
+
+.save-indicator {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  text-align: center;
+  height: 16px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.save-indicator.visible { opacity: 1; }
 .status-picker .status-inactive { opacity: 0.4; }
 
 .fab {
