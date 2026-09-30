@@ -263,7 +263,7 @@
       return;
     }
 
-    content.innerHTML = trips.map((t) => `
+    const tripCardHtml = (t) => `
       <button class="trip-card" data-nav="#/trips/${t.id}">
         <div class="row1">
           <span class="client-name">${escapeHtml(t.client_name)}</span>
@@ -271,9 +271,33 @@
         </div>
         <div class="dates">${escapeHtml(t.purpose || "Business trip")} &middot; ${fmtDate(t.start_date)} – ${fmtDate(t.end_date)}</div>
         <span class="status-badge status-${t.status}">${escapeHtml(t.status)}</span>
-      </button>
-    `).join("");
+      </button>`;
+
+    // Trips come back most-recent-first; show a handful by default and
+    // let older ones stay tucked away instead of piling up on screen.
+    const VISIBLE_DEFAULT = 5;
+    const visible = trips.slice(0, VISIBLE_DEFAULT);
+    const older = trips.slice(VISIBLE_DEFAULT);
+
+    content.innerHTML = `
+      ${visible.map(tripCardHtml).join("")}
+      ${older.length > 0 ? `
+        <button class="btn btn-outline btn-sm" data-action="show-older-trips" style="margin-bottom:10px;">
+          Show ${older.length} older trip${older.length === 1 ? "" : "s"}
+        </button>
+        <div id="older-trips"></div>
+      ` : ""}
+    `;
     bindNavButtons(content);
+
+    if (older.length > 0) {
+      content.querySelector('[data-action="show-older-trips"]').addEventListener("click", (e) => {
+        const olderContainer = content.querySelector("#older-trips");
+        olderContainer.innerHTML = older.map(tripCardHtml).join("");
+        bindNavButtons(olderContainer);
+        e.target.remove();
+      });
+    }
   }
 
   // ---------------- New Trip ----------------
