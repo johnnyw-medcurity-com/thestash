@@ -29,6 +29,8 @@ MAX_CONTENT_LENGTH = 15 * 1024 * 1024  # 15 MB
 # not a public app, and the AI receipt parsing is billed to one shared API
 # key, so open signup is a real cost/data exposure, not just clutter.
 ALLOWED_EMAIL_DOMAIN = "medcurity.com"
+# A trip's lifecycle: drafted, sent off for reimbursement, then actually paid.
+TRIP_STATUSES = ("draft", "submitted", "reimbursed")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -406,6 +408,10 @@ def update_trip(trip_id):
     for key in ("purpose", "start_date", "end_date", "status", "client_id"):
         if key in data:
             fields[key] = data[key]
+
+    if "status" in fields and fields["status"] not in TRIP_STATUSES:
+        db.close()
+        return jsonify({"error": f"Status must be one of: {', '.join(TRIP_STATUSES)}"}), 400
 
     if fields:
         set_clause = ", ".join(f"{k} = ?" for k in fields)

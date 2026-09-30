@@ -273,31 +273,56 @@
         <span class="status-badge status-${t.status}">${escapeHtml(t.status)}</span>
       </button>`;
 
-    // Trips come back most-recent-first; show a handful by default and
-    // let older ones stay tucked away instead of piling up on screen.
-    const VISIBLE_DEFAULT = 5;
-    const visible = trips.slice(0, VISIBLE_DEFAULT);
-    const older = trips.slice(VISIBLE_DEFAULT);
+    const FILTERS = ["all", ...TRIP_STATUSES];
+    let currentFilter = "all";
 
-    content.innerHTML = `
-      ${visible.map(tripCardHtml).join("")}
-      ${older.length > 0 ? `
-        <button class="btn btn-outline btn-sm" data-action="show-older-trips" style="margin-bottom:10px;">
-          Show ${older.length} older trip${older.length === 1 ? "" : "s"}
-        </button>
-        <div id="older-trips"></div>
-      ` : ""}
-    `;
-    bindNavButtons(content);
+    function renderFiltered() {
+      const filtered = currentFilter === "all" ? trips : trips.filter((t) => t.status === currentFilter);
 
-    if (older.length > 0) {
-      content.querySelector('[data-action="show-older-trips"]').addEventListener("click", (e) => {
-        const olderContainer = content.querySelector("#older-trips");
-        olderContainer.innerHTML = older.map(tripCardHtml).join("");
-        bindNavButtons(olderContainer);
-        e.target.remove();
+      // Trips come back most-recent-first; show a handful by default and
+      // let older ones stay tucked away instead of piling up on screen.
+      const VISIBLE_DEFAULT = 5;
+      const visible = filtered.slice(0, VISIBLE_DEFAULT);
+      const older = filtered.slice(VISIBLE_DEFAULT);
+
+      content.innerHTML = `
+        <div class="status-picker" style="margin-bottom:12px;">
+          ${FILTERS.map((f) => `
+            <button class="status-badge ${f === "all" ? "status-all" : "status-" + f} ${currentFilter === f ? "" : "status-inactive"}" data-action="filter-trips" data-filter="${f}">
+              ${f === "all" ? "All" : f} ${f === "all" ? "" : `(${trips.filter((t) => t.status === f).length})`}
+            </button>
+          `).join("")}
+        </div>
+        ${filtered.length === 0
+          ? `<p class="muted" style="text-align:center; padding:24px 0;">No ${currentFilter} trips.</p>`
+          : visible.map(tripCardHtml).join("")}
+        ${older.length > 0 ? `
+          <button class="btn btn-outline btn-sm" data-action="show-older-trips" style="margin-bottom:10px;">
+            Show ${older.length} older trip${older.length === 1 ? "" : "s"}
+          </button>
+          <div id="older-trips"></div>
+        ` : ""}
+      `;
+      bindNavButtons(content);
+
+      content.querySelectorAll('[data-action="filter-trips"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentFilter = btn.dataset.filter;
+          renderFiltered();
+        });
       });
+
+      if (older.length > 0) {
+        content.querySelector('[data-action="show-older-trips"]').addEventListener("click", (e) => {
+          const olderContainer = content.querySelector("#older-trips");
+          olderContainer.innerHTML = older.map(tripCardHtml).join("");
+          bindNavButtons(olderContainer);
+          e.target.remove();
+        });
+      }
     }
+
+    renderFiltered();
   }
 
   // ---------------- New Trip ----------------
@@ -377,6 +402,8 @@
     bindTripDetailEvents(content, trip);
   }
 
+  const TRIP_STATUSES = ["draft", "submitted", "reimbursed"];
+
   function tripDetailHtml(trip) {
     const expenses = trip.expenses || [];
     return `
@@ -389,9 +416,13 @@
         <p class="muted" style="margin:2px 0 0">${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)}</p>
         <div class="divider"></div>
         <div class="total-bar"><span>Total</span><span>${fmtMoney(trip.total)}</span></div>
-        <button class="btn btn-outline btn-sm" data-action="toggle-status" style="margin-top:10px;">
-          ${trip.status === "submitted" ? "Mark as Draft" : "Mark as Submitted"}
-        </button>
+        <div class="status-picker" style="margin-top:10px;">
+          ${TRIP_STATUSES.map((s) => `
+            <button class="status-badge status-${s} ${trip.status === s ? "" : "status-inactive"}" data-action="set-status" data-status="${s}">
+              ${s}
+            </button>
+          `).join("")}
+        </div>
       </div>
 
       <details class="card" style="padding-bottom:6px;">
@@ -500,16 +531,19 @@
       }
     });
     root.querySelector('[data-action="delete-trip"]').addEventListener("click", (e) => deleteTrip(trip.id, e.currentTarget));
-    root.querySelector('[data-action="toggle-status"]').addEventListener("click", async (e) => {
-      const newStatus = trip.status === "submitted" ? "draft" : "submitted";
-      const restore = setBusy(e.currentTarget, "Updating…");
-      try {
-        await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
-        renderTripDetail(trip.id);
-      } catch (err) {
-        alert("Could not update status: " + err.message);
-        restore();
-      }
+    root.querySelectorAll('[data-action="set-status"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const newStatus = btn.dataset.status;
+        if (newStatus === trip.status) return;
+        const restore = setBusy(btn, "…");
+        try {
+          await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
+          renderTripDetail(trip.id);
+        } catch (err) {
+          alert("Could not update status: " + err.message);
+          restore();
+        }
+      });
     });
     root.querySelectorAll('[data-action="view-receipt"]').forEach((img) => {
       img.addEventListener("click", () => openReceiptLightbox(img.dataset.src));

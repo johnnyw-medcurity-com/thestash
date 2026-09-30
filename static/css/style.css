@@ -3,6 +3,7 @@
   --navy-light: #334155;
   --blue: #2563eb;
   --blue-dark: #1d4ed8;
+  --blue-bg: #eff6ff;
   --green: #16a34a;
   --green-bg: #f0fdf4;
   --red: #dc2626;
@@ -230,6 +231,23 @@ button {
 }
 .status-draft { background: var(--amber-bg); color: var(--amber); }
 .status-submitted { background: var(--green-bg); color: var(--green); }
+.status-reimbursed { background: var(--blue-bg); color: var(--blue); }
+.status-all { background: var(--border); color: var(--text); }
+
+.status-picker {
+  display: flex;
+  gap: 6px;
+}
+.status-picker .status-badge {
+  flex: 1;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  margin-top: 0;
+  padding: 8px 6px;
+  transition: opacity 0.15s;
+}
+.status-picker .status-inactive { opacity: 0.4; }
 
 .fab {
   position: fixed;
@@ -451,6 +469,7 @@ button {
     --green-bg: rgba(22, 163, 74, 0.16);
     --red-bg: rgba(220, 38, 38, 0.16);
     --amber-bg: rgba(217, 119, 6, 0.18);
+    --blue-bg: rgba(37, 99, 235, 0.18);
   }
   input, select, textarea { background: #1f2937; color: var(--text); border-color: #334155; }
   .btn-outline { background: #111827; }
@@ -463,6 +482,7 @@ button {
   .rules-col.covered h4, .status-submitted, .success-msg { color: #4ade80; }
   .rules-col.not-covered h4, .flag-badge, .error-msg, .btn-danger { color: #f87171; }
   .status-draft { color: #fbbf24; }
+  .status-reimbursed { color: #60a5fa; }
   .rules-col.covered { border-color: rgba(22, 163, 74, 0.35); }
   .rules-col.not-covered { border-color: rgba(220, 38, 38, 0.35); }
   .success-msg { border-color: rgba(22, 163, 74, 0.35); }
