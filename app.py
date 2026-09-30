@@ -13,7 +13,7 @@ from categories import (
     NEEDS_REVIEW_CATEGORY,
     ALL_CATEGORIES,
     MILEAGE_CATEGORY,
-    MILEAGE_RATE_PER_MILE,
+    LEGACY_MILEAGE_RATE,
 )
 from pdf_report import build_trip_pdf
 from receipt_parser import parse_receipt_image
@@ -83,6 +83,37 @@ def trip_public(row, total=None):
     return d
 
 
+def get_mileage_rates(db):
+    """The full, user-editable rate history, ascending by effective date."""
+    rows = db.execute("SELECT id, effective_date, rate FROM mileage_rates ORDER BY effective_date ASC").fetchall()
+    return [{"id": r["id"], "effective_date": r["effective_date"], "rate": r["rate"]} for r in rows]
+
+
+def default_mileage_rate(db, date_str):
+    """Rate in effect on date_str (YYYY-MM-DD); earliest known rate if
+    date_str is before all of them; LEGACY_MILEAGE_RATE if the table is
+    somehow empty (shouldn't happen -- database.py seeds it on first run)."""
+    rates = get_mileage_rates(db)
+    if not rates:
+        return LEGACY_MILEAGE_RATE
+    rate = rates[0]["rate"]
+    for r in rates:
+        if (date_str or "") >= r["effective_date"]:
+            rate = r["rate"]
+    return rate
+
+
+def parse_mileage_rate(db, raw, date_str):
+    """User-supplied $/mile, or the default for the date when blank.
+    Raises ValueError for unusable input."""
+    if raw in (None, ""):
+        return default_mileage_rate(db, date_str)
+    rate = float(raw)
+    if not (0 < rate <= 10):
+        raise ValueError("out of range")
+    return rate
+
+
 def expense_public(row):
     return {
         "id": row["id"],
@@ -95,6 +126,7 @@ def expense_public(row):
         "flagged": bool(row["flagged"]),
         "receipt_filename": row["receipt_filename"],
         "miles": row["miles"],
+        "mileage_rate": row["mileage_rate"],
         "created_at": row["created_at"],
     }
 
@@ -174,12 +206,77 @@ def me():
 @app.route("/api/categories")
 @require_auth
 def categories():
+    db = get_db()
+    rates = get_mileage_rates(db)
+    db.close()
     return jsonify({
         "covered": COVERED_CATEGORIES,
         "needs_review": NEEDS_REVIEW_CATEGORY,
         "mileage_category": MILEAGE_CATEGORY,
-        "mileage_rate": MILEAGE_RATE_PER_MILE,
+        "mileage_rates": [{"from": r["effective_date"], "rate": r["rate"]} for r in rates],
     })
+
+
+# ---------- Mileage rate history ----------
+
+
+@app.route("/api/mileage-rates", methods=["GET"])
+@require_auth
+def list_mileage_rates():
+    db = get_db()
+    rates = get_mileage_rates(db)
+    db.close()
+    return jsonify(rates)
+
+
+@app.route("/api/mileage-rates", methods=["POST"])
+@require_auth
+def create_mileage_rate():
+    data = request.get_json(force=True) or {}
+    effective_date = (data.get("effective_date") or "").strip()
+    try:
+        rate = float(data.get("rate"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Rate must be a number"}), 400
+
+    if not effective_date:
+        return jsonify({"error": "Effective date is required"}), 400
+    if not (0 < rate <= 10):
+        return jsonify({"error": "Rate must be a positive number (in dollars per mile)"}), 400
+
+    db = get_db()
+    # One rate per date -- re-adding the same date updates it instead of
+    # creating a confusing duplicate.
+    existing = db.execute("SELECT id FROM mileage_rates WHERE effective_date = ?", (effective_date,)).fetchone()
+    if existing:
+        db.execute("UPDATE mileage_rates SET rate = ? WHERE id = ?", (rate, existing["id"]))
+    else:
+        db.execute(
+            "INSERT INTO mileage_rates (effective_date, rate, created_at) VALUES (?, ?, ?)",
+            (effective_date, rate, now_iso()),
+        )
+    db.commit()
+    rates = get_mileage_rates(db)
+    db.close()
+    return jsonify(rates), 201
+
+
+@app.route("/api/mileage-rates/<int:rate_id>", methods=["DELETE"])
+@require_auth
+def delete_mileage_rate(rate_id):
+    db = get_db()
+    row = db.execute("SELECT id FROM mileage_rates WHERE id = ?", (rate_id,)).fetchone()
+    if not row:
+        db.close()
+        return jsonify({"error": "Rate not found"}), 404
+    if db.execute("SELECT COUNT(*) AS n FROM mileage_rates").fetchone()["n"] <= 1:
+        db.close()
+        return jsonify({"error": "At least one rate must remain"}), 400
+    db.execute("DELETE FROM mileage_rates WHERE id = ?", (rate_id,))
+    db.commit()
+    rates = get_mileage_rates(db)
+    db.close()
+    return jsonify(rates)
 
 
 # ---------- Clients ----------
@@ -409,6 +506,7 @@ def create_expense(trip_id):
         return jsonify({"error": "Unknown category"}), 400
 
     miles = None
+    mileage_rate = None
     if category == MILEAGE_CATEGORY:
         try:
             miles = float(form.get("miles") or "0")
@@ -418,9 +516,13 @@ def create_expense(trip_id):
         if miles <= 0:
             db.close()
             return jsonify({"error": "Miles driven must be greater than zero"}), 400
-        # Computed server-side so the reimbursed amount can never drift from
-        # the rate, regardless of what the client displayed/sent.
-        amount = round(miles * MILEAGE_RATE_PER_MILE, 2)
+        try:
+            mileage_rate = parse_mileage_rate(db, form.get("mileage_rate"), date)
+        except ValueError:
+            db.close()
+            return jsonify({"error": "Rate per mile must be a positive number"}), 400
+        # Computed server-side so the amount always matches miles x rate.
+        amount = round(miles * mileage_rate, 2)
     else:
         try:
             amount = float(form.get("amount") or "0")
@@ -443,9 +545,9 @@ def create_expense(trip_id):
         receipt_filename = save_receipt_file(file)
 
     cur = db.execute(
-        "INSERT INTO expenses (trip_id, date, category, vendor, amount, notes, flagged, receipt_filename, miles, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (trip_id, date, category, vendor, amount, notes, int(flagged), receipt_filename, miles, now_iso()),
+        "INSERT INTO expenses (trip_id, date, category, vendor, amount, notes, flagged, receipt_filename, miles, mileage_rate, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (trip_id, date, category, vendor, amount, notes, int(flagged), receipt_filename, miles, mileage_rate, now_iso()),
     )
     db.commit()
     expense_id = cur.lastrowid
@@ -492,8 +594,18 @@ def update_expense(expense_id):
                 if miles_val <= 0:
                     db.close()
                     return jsonify({"error": "Miles driven must be greater than zero"}), 400
+                try:
+                    rate_val = parse_mileage_rate(
+                        db,
+                        form.get("mileage_rate"),
+                        fields.get("date", row["date"]),
+                    ) if "mileage_rate" in form else (row["mileage_rate"] or default_mileage_rate(db, fields.get("date", row["date"])))
+                except (TypeError, ValueError):
+                    db.close()
+                    return jsonify({"error": "Rate per mile must be a positive number"}), 400
                 fields["miles"] = miles_val
-                fields["amount"] = round(miles_val * MILEAGE_RATE_PER_MILE, 2)
+                fields["mileage_rate"] = rate_val
+                fields["amount"] = round(miles_val * rate_val, 2)
             else:
                 try:
                     amount_val = float(form.get("amount") or "0")
@@ -505,6 +617,7 @@ def update_expense(expense_id):
                     return jsonify({"error": "A positive amount is required"}), 400
                 fields["amount"] = amount_val
                 fields["miles"] = None
+                fields["mileage_rate"] = None
 
         if "notes" in form:
             fields["notes"] = form.get("notes")
@@ -538,8 +651,18 @@ def update_expense(expense_id):
                 if miles_val <= 0:
                     db.close()
                     return jsonify({"error": "Miles driven must be greater than zero"}), 400
+                try:
+                    rate_val = parse_mileage_rate(
+                        db,
+                        data.get("mileage_rate"),
+                        fields.get("date", row["date"]),
+                    ) if "mileage_rate" in data else (row["mileage_rate"] or default_mileage_rate(db, fields.get("date", row["date"])))
+                except (TypeError, ValueError):
+                    db.close()
+                    return jsonify({"error": "Rate per mile must be a positive number"}), 400
                 fields["miles"] = miles_val
-                fields["amount"] = round(miles_val * MILEAGE_RATE_PER_MILE, 2)
+                fields["mileage_rate"] = rate_val
+                fields["amount"] = round(miles_val * rate_val, 2)
             else:
                 try:
                     amount_val = float(data.get("amount") or 0)
@@ -551,6 +674,7 @@ def update_expense(expense_id):
                     return jsonify({"error": "A positive amount is required"}), 400
                 fields["amount"] = amount_val
                 fields["miles"] = None
+                fields["mileage_rate"] = None
 
         if "flagged" in fields:
             fields["flagged"] = int(bool(fields["flagged"]))

@@ -1,3 +1,4 @@
+import datetime
 import os
 import sqlite3
 from pathlib import Path
@@ -54,6 +55,13 @@ CREATE TABLE IF NOT EXISTS report_log (
     recipient_name TEXT,
     sent_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS mileage_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    effective_date TEXT NOT NULL UNIQUE,
+    rate REAL NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -73,5 +81,21 @@ def init_db():
     existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(expenses)")}
     if "miles" not in existing_cols:
         conn.execute("ALTER TABLE expenses ADD COLUMN miles REAL")
+    if "mileage_rate" not in existing_cols:
+        conn.execute("ALTER TABLE expenses ADD COLUMN mileage_rate REAL")
+        # Existing mileage rows were all priced at the old fixed rate.
+        conn.execute("UPDATE expenses SET mileage_rate = 0.725 WHERE miles IS NOT NULL")
+
+    # Seed the rate-history table once from the previous hardcoded defaults,
+    # so the switch to a DB-managed, user-editable history doesn't lose the
+    # dates/rates already baked into existing mileage expenses.
+    if conn.execute("SELECT COUNT(*) AS n FROM mileage_rates").fetchone()["n"] == 0:
+        now = datetime.datetime.utcnow().isoformat()
+        for effective_date, rate in (("2026-01-01", 0.725), ("2026-07-01", 0.76)):
+            conn.execute(
+                "INSERT INTO mileage_rates (effective_date, rate, created_at) VALUES (?, ?, ?)",
+                (effective_date, rate, now),
+            )
+
     conn.commit()
     conn.close()
