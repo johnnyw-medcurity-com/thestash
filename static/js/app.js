@@ -7,7 +7,7 @@
     token: localStorage.getItem("token") || null,
     user: JSON.parse(localStorage.getItem("user") || "null"),
     clients: [],
-    categories: { covered: [], needs_review: "", mileage_category: "", mileage_rates: [] },
+    categories: { covered: [], needs_review: "", mileage_category: "", mileage_rate: 0 },
   };
 
   // ---------------- API helper ----------------
@@ -236,7 +236,6 @@
       ${topbar({
         title: "My Trips",
         right: `
-          <button class="link-btn" data-action="mileage-rate">Mileage Rate</button>
           <button class="link-btn" data-action="logout">Log out</button>
         `,
       })}
@@ -249,7 +248,6 @@
 
     bindNavButtons(APP);
     APP.querySelector('[data-action="logout"]').addEventListener("click", logout);
-    APP.querySelector('[data-action="mileage-rate"]').addEventListener("click", openMileageRateModal);
 
     const trips = await api("/api/trips");
     const content = APP.querySelector("#dash-content");
@@ -614,97 +612,6 @@
     return backdrop;
   }
 
-  // ---------------- Mileage rate modal ----------------
-
-  function openMileageRateModal() {
-    const modal = openModal(`
-      <div class="modal-header">
-        <h2 style="margin:0;">Mileage Rate</h2>
-        <button class="modal-close" data-close>&times;</button>
-      </div>
-      <p class="muted">Used to calculate mileage reimbursement. Add a new rate whenever it
-        changes — expenses already logged keep whatever rate was in effect when they were added.</p>
-      <div id="rate-error"></div>
-      <div id="rate-list"><div class="spinner"></div></div>
-      <form id="add-rate-form" style="margin-top:14px;">
-        <div class="inline-row">
-          <label>Effective date
-            <input type="date" name="effective_date" value="${todayISO()}" required>
-          </label>
-          <label>Rate ($/mile)
-            <input type="number" name="rate" step="0.001" min="0.001" inputmode="decimal" placeholder="0.700" required>
-          </label>
-        </div>
-        <button class="btn btn-primary" type="submit">Add Rate</button>
-      </form>
-    `);
-
-    modal.querySelector("[data-close]").addEventListener("click", () => modal.remove());
-    const listEl = modal.querySelector("#rate-list");
-    const errorEl = modal.querySelector("#rate-error");
-
-    // Keep the shared lookup the Add/Edit Expense form reads from (a plain
-    // {from, rate} list) in sync, so a change here takes effect immediately
-    // without needing a reload.
-    function syncSharedState(rates) {
-      state.categories.mileage_rates = rates.map((r) => ({ from: r.effective_date, rate: r.rate }));
-    }
-
-    function renderList(rates) {
-      syncSharedState(rates);
-      const sorted = [...rates].sort((a, b) => b.effective_date.localeCompare(a.effective_date));
-      const canDelete = sorted.length > 1;
-      listEl.innerHTML = sorted.map((r) => `
-        <div class="expense-row">
-          <div class="expense-main" style="flex:1;">
-            <div class="cat">$${r.rate.toFixed(3)}/mile</div>
-            <div class="vendor">Effective ${fmtDate(r.effective_date)}</div>
-          </div>
-          ${canDelete ? `<div class="expense-actions"><button class="danger" data-action="delete-rate" data-id="${r.id}">Delete</button></div>` : ""}
-        </div>
-      `).join("");
-      listEl.querySelectorAll('[data-action="delete-rate"]').forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          if (!confirm("Delete this rate?")) return;
-          errorEl.innerHTML = "";
-          const restore = setBusy(btn, "Deleting…");
-          try {
-            const updated = await api(`/api/mileage-rates/${btn.dataset.id}`, { method: "DELETE" });
-            renderList(updated);
-          } catch (err) {
-            errorEl.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
-            restore();
-          }
-        });
-      });
-    }
-
-    api("/api/mileage-rates")
-      .then(renderList)
-      .catch((err) => {
-        listEl.innerHTML = "";
-        errorEl.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
-      });
-
-    modal.querySelector("#add-rate-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      errorEl.innerHTML = "";
-      const fd = new FormData(e.target);
-      const payload = Object.fromEntries(fd.entries());
-      const restore = setBusy(e.target.querySelector('button[type=submit]'), "Adding…");
-      try {
-        const updated = await api("/api/mileage-rates", { method: "POST", json: payload });
-        renderList(updated);
-        e.target.reset();
-        e.target.querySelector('input[name="effective_date"]').value = todayISO();
-      } catch (err) {
-        errorEl.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
-      } finally {
-        restore();
-      }
-    });
-  }
-
   function openExpenseModal(tripId, existing, { openPhotoPicker = true } = {}) {
     const isEdit = !!existing;
     const modal = openModal(`
@@ -772,34 +679,19 @@
     const amountField = form.querySelector("#amount-field");
     const amountInput = form.querySelector('input[name="amount"]');
     const rateInput = form.querySelector('input[name="mileage_rate"]');
-    const dateInput = form.querySelector('input[name="date"]');
 
-    // IRS rate in effect on the chosen date; the field is pre-filled with it
-    // but stays editable for people reimbursed at a different rate.
-    function defaultRateFor(dateStr) {
-      let rate = 0;
-      for (const r of state.categories.mileage_rates) {
-        if (!rate || dateStr >= r.from) rate = r.rate;
-      }
-      return rate;
-    }
-
-    let rateEdited = !!(existing && existing.mileage_rate != null);
-    if (!rateEdited) rateInput.value = defaultRateFor(dateInput.value).toFixed(3);
-    rateInput.addEventListener("input", () => { rateEdited = true; recomputeMileageAmount(); });
-    dateInput.addEventListener("change", () => {
-      if (!rateEdited) {
-        rateInput.value = defaultRateFor(dateInput.value).toFixed(3);
-        recomputeMileageAmount();
-      }
-    });
+    // Pre-filled with whatever rate the user last used (or the bootstrap
+    // default for a first-timer), but stays editable per expense.
+    const rateEdited = !!(existing && existing.mileage_rate != null);
+    if (!rateEdited) rateInput.value = state.categories.mileage_rate.toFixed(3);
+    rateInput.addEventListener("input", recomputeMileageAmount);
 
     function recomputeMileageAmount() {
       const miles = parseFloat(milesInput.value) || 0;
       const rate = parseFloat(rateInput.value) || 0;
       mileageHint.textContent = miles > 0 && rate > 0
         ? `${miles} mi × $${rate.toFixed(3)}/mi = ${fmtMoney(miles * rate)}`
-        : `IRS rate on this date: $${defaultRateFor(dateInput.value).toFixed(3)}/mile`;
+        : `Default rate: $${state.categories.mileage_rate.toFixed(3)}/mile`;
       amountInput.value = miles > 0 && rate > 0 ? (miles * rate).toFixed(2) : "";
     }
 
@@ -928,6 +820,13 @@
           await api(`/api/expenses/${existing.id}`, { method: "PATCH", form: fd });
         } else {
           await api(`/api/trips/${tripId}/expenses`, { method: "POST", form: fd });
+        }
+        // Keep the cached default in sync so the next Add Expense in this
+        // session pre-fills with the rate that was just used, without
+        // needing a reload to re-fetch /api/categories.
+        if (categorySelect.value === state.categories.mileage_category) {
+          const savedRate = parseFloat(rateInput.value);
+          if (savedRate > 0) state.categories.mileage_rate = savedRate;
         }
         modal.remove();
         renderTripDetail(tripId);
