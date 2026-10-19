@@ -292,6 +292,19 @@ button {
 .save-indicator.visible { opacity: 1; }
 .status-picker .status-inactive { opacity: 0.4; }
 
+.filter-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 4px 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.filter-total strong {
+  font-size: 18px;
+  color: var(--text);
+}
+
 .fab {
   position: fixed;
   bottom: 20px;

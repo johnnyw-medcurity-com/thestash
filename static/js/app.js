@@ -291,6 +291,10 @@
             </button>
           `).join("")}
         </div>
+        <div class="filter-total">
+          <span>${currentFilter === "all" ? "Total, all trips" : `Total ${currentFilter}`}</span>
+          <strong>${fmtMoney(filtered.reduce((sum, t) => sum + (t.total || 0), 0))}</strong>
+        </div>
         ${filtered.length === 0
           ? `<p class="muted" style="text-align:center; padding:24px 0;">No ${currentFilter} trips.</p>`
           : visible.map(tripCardHtml).join("")}
