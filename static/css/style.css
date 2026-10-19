@@ -292,6 +292,13 @@ button {
 .save-indicator.visible { opacity: 1; }
 .status-picker .status-inactive { opacity: 0.4; }
 
+.year-select {
+  width: auto;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
 .filter-total {
   display: flex;
   justify-content: space-between;

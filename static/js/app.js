@@ -274,8 +274,16 @@
     const FILTERS = ["all", ...TRIP_STATUSES];
     let currentFilter = "all";
 
+    // A trip belongs to the year it starts in. Defaults to the current year;
+    // the current year is always offered even if it has no trips yet.
+    const tripYear = (t) => (t.start_date || "").slice(0, 4);
+    const thisYear = todayISO().slice(0, 4);
+    const years = [...new Set([thisYear, ...trips.map(tripYear).filter(Boolean)])].sort().reverse();
+    let currentYear = thisYear;
+
     function renderFiltered() {
-      const filtered = currentFilter === "all" ? trips : trips.filter((t) => t.status === currentFilter);
+      const yearTrips = currentYear === "all" ? trips : trips.filter((t) => tripYear(t) === currentYear);
+      const filtered = currentFilter === "all" ? yearTrips : yearTrips.filter((t) => t.status === currentFilter);
 
       // Trips come back most-recent-first; show a handful by default and
       // let older ones stay tucked away instead of piling up on screen.
@@ -284,10 +292,14 @@
       const older = filtered.slice(VISIBLE_DEFAULT);
 
       content.innerHTML = `
+        <select class="year-select" data-action="filter-year" aria-label="Year">
+          ${years.map((y) => `<option value="${y}" ${currentYear === y ? "selected" : ""}>${y}</option>`).join("")}
+          <option value="all" ${currentYear === "all" ? "selected" : ""}>All years</option>
+        </select>
         <div class="status-picker" style="margin-bottom:12px;">
           ${FILTERS.map((f) => `
             <button class="status-badge ${f === "all" ? "status-all" : "status-" + f} ${currentFilter === f ? "" : "status-inactive"}" data-action="filter-trips" data-filter="${f}">
-              ${f === "all" ? "All" : f} ${f === "all" ? "" : `(${trips.filter((t) => t.status === f).length})`}
+              ${f === "all" ? "All" : f} ${f === "all" ? "" : `(${yearTrips.filter((t) => t.status === f).length})`}
             </button>
           `).join("")}
         </div>
@@ -306,6 +318,11 @@
         ` : ""}
       `;
       bindNavButtons(content);
+
+      content.querySelector('[data-action="filter-year"]').addEventListener("change", (e) => {
+        currentYear = e.target.value;
+        renderFiltered();
+      });
 
       content.querySelectorAll('[data-action="filter-trips"]').forEach((btn) => {
         btn.addEventListener("click", () => {
