@@ -16,6 +16,7 @@
   --text: #0f172a;
   --text-muted: #64748b;
   --radius: 12px;
+  color-scheme: light dark;
 }
 
 * { box-sizing: border-box; }
@@ -145,6 +146,7 @@ textarea { resize: vertical; min-height: 60px; }
 
 button {
   font-family: inherit;
+  color: inherit;
   cursor: pointer;
 }
 
@@ -164,7 +166,7 @@ button {
 .btn-primary { background: var(--blue); color: white; }
 .btn-primary:active { background: var(--blue-dark); }
 .btn-secondary { background: var(--navy); color: white; }
-.btn-outline { background: white; color: var(--navy); border: 1px solid var(--border); }
+.btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
 .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid #fecaca; }
 .btn-sm { padding: 8px 12px; font-size: 13px; width: auto; }
 .btn-block { width: 100%; }
@@ -217,7 +219,7 @@ button {
 }
 
 .trip-card .client-name { font-weight: 700; font-size: 16px; }
-.trip-card .amount { font-weight: 700; font-size: 16px; color: var(--navy); }
+.trip-card .amount { font-weight: 700; font-size: 16px; color: var(--text); }
 .trip-card .dates { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
 
 .status-badge {
@@ -562,9 +564,13 @@ button {
     --red-bg: rgba(220, 38, 38, 0.16);
     --amber-bg: rgba(217, 119, 6, 0.18);
     --blue-bg: rgba(37, 99, 235, 0.18);
+    --navy-light: #cbd5e1;
   }
   input, select, textarea { background: #1f2937; color: var(--text); border-color: #334155; }
   .btn-outline { background: #111827; }
+  .expense-actions button { color: #60a5fa; }
+  .expense-actions button.danger { color: #f87171; }
+  .status-picker .status-inactive { opacity: 0.8; }
 
   /* These badges/boxes use solid light tints in light mode (readable dark
      text on a pale background) -- in dark mode the same light backgrounds
