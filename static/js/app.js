@@ -640,6 +640,7 @@
         <h2 style="margin:0;">${isEdit ? "Edit Expense" : "Add Expense"}</h2>
         <button class="modal-close" data-close>&times;</button>
       </div>
+      <div id="receipt-banner" class="receipt-banner" role="status" aria-live="polite" hidden></div>
       <div id="expense-error"></div>
       <form id="expense-form">
         <label>Date
@@ -676,7 +677,6 @@
           <input type="file" id="receipt-input" name="receipt" accept="image/*,application/pdf">
         </label>
         <div id="receipt-preview-container"></div>
-        <div id="receipt-status" class="muted" style="margin-top:-6px;"></div>
         <div id="receipt-raw-text"></div>
         ${existing && existing.receipt_filename ? `<p class="muted">Choosing a new file replaces the attached receipt.</p>` : ""}
         <button class="btn btn-primary" type="submit">${isEdit ? "Save Changes" : "Add Expense"}</button>
@@ -732,8 +732,44 @@
     updateMileageUI();
 
     const receiptInput = form.querySelector("#receipt-input");
-    const receiptStatus = form.querySelector("#receipt-status");
+    const receiptBanner = modal.querySelector("#receipt-banner");
     const receiptRawText = form.querySelector("#receipt-raw-text");
+
+    // Lives at the top of the modal (sticky) rather than next to the file
+    // input, which is usually scrolled out of view by the time the photo
+    // is chosen -- people read a silent screen as a frozen one.
+    const READING_MESSAGES = [
+      "Squinting at your receipt…",
+      "Asking the receipt what it's been up to…",
+      "Counting the zeros very carefully…",
+      "Receipts are wordier than they look. Still reading…",
+      "Almost there. Probably.",
+      "Big receipt. Still on it — hang tight.",
+    ];
+    let readingTimer = null;
+
+    function stopReadingTimer() {
+      if (readingTimer) clearInterval(readingTimer);
+      readingTimer = null;
+    }
+
+    function showReceiptBanner(text, { busy = false } = {}) {
+      stopReadingTimer();
+      receiptBanner.hidden = false;
+      receiptBanner.classList.toggle("busy", busy);
+      receiptBanner.innerHTML = `${busy ? '<span class="receipt-banner-spinner"></span>' : ""}<span class="receipt-banner-text"></span>`;
+      receiptBanner.querySelector(".receipt-banner-text").textContent = text;
+    }
+
+    function startReadingBanner() {
+      let i = 0;
+      showReceiptBanner(READING_MESSAGES[0], { busy: true });
+      readingTimer = setInterval(() => {
+        if (!document.body.contains(modal)) return stopReadingTimer();
+        i = Math.min(i + 1, READING_MESSAGES.length - 1);
+        receiptBanner.querySelector(".receipt-banner-text").textContent = READING_MESSAGES[i];
+      }, 3000);
+    }
     const receiptPreviewContainer = form.querySelector("#receipt-preview-container");
     let previewObjectUrl = null;
 
@@ -773,7 +809,7 @@
         showReceiptPreview(previewObjectUrl);
       }
 
-      receiptStatus.textContent = "Reading receipt…";
+      startReadingBanner();
       receiptRawText.innerHTML = "";
       try {
         const parseForm = new FormData();
@@ -781,7 +817,7 @@
         const result = await api("/api/receipts/parse", { method: "POST", form: parseForm });
         const methodLabel = result.source === "ai" ? "AI" : result.source === "ocr" ? "basic OCR" : "";
         if (!result.ocr_available) {
-          receiptStatus.textContent = "Couldn't auto-read this receipt — fill in the details below.";
+          showReceiptBanner("Couldn't auto-read this receipt — fill in the details below.");
           return;
         }
         let filledAny = false;
@@ -802,9 +838,9 @@
           categorySelect.dispatchEvent(new Event("change"));
           filledAny = true;
         }
-        receiptStatus.textContent = filledAny
+        showReceiptBanner(filledAny
           ? `Filled in via ${methodLabel} — check it over and adjust anything that's wrong.`
-          : `${methodLabel} couldn't make out the details on this receipt — fill them in below.`;
+          : `${methodLabel} couldn't make out the details on this receipt — fill them in below.`);
         if (result.raw_text) {
           receiptRawText.innerHTML = `
             <details style="margin-top:6px;">
@@ -813,7 +849,7 @@
             </details>`;
         }
       } catch (err) {
-        receiptStatus.textContent = "Couldn't auto-read this receipt — fill in the details below.";
+        showReceiptBanner("Couldn't auto-read this receipt — fill in the details below.");
       }
     });
 

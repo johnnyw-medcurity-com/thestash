@@ -451,6 +451,35 @@ button {
   align-items: center;
   margin-bottom: 12px;
 }
+.receipt-banner {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -20px 12px;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.receipt-banner[hidden] { display: none; }
+.receipt-banner.busy {
+  background: var(--blue-bg);
+  color: var(--blue);
+  font-weight: 600;
+}
+.receipt-banner-spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
 .modal-close {
   background: none;
   border: none;
