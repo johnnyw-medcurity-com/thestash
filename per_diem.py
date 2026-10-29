@@ -25,6 +25,25 @@ MONTHS = [
 
 STANDARD_CITY = "standard rate"
 
+STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois",
+    "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
+    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
+    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
+    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota",
+    "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia",
+    "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+    "PR": "Puerto Rico", "GU": "Guam", "VI": "Virgin Islands", "AS": "American Samoa",
+    "MP": "Northern Mariana Islands",
+}
+# "dayton oh" and "dayton ohio" both resolve to OH (lowercase key -> code).
+STATE_LOOKUP = {**{code.lower(): code for code in STATE_NAMES},
+                **{name.lower(): code for code, name in STATE_NAMES.items()}}
+
 _datasets = {}
 
 
@@ -84,10 +103,16 @@ def _parse_query(q):
     q = (q or "").strip()
     if re.fullmatch(r"\d{5}(-\d{4})?", q):
         return "zip", q[:5], None
-    m = re.fullmatch(r"(.+?)[\s,]+([A-Za-z]{2})", q)
-    if m:
-        return "city", m.group(1).strip(), m.group(2).upper()
-    raise PerDiemError("Enter a 5-digit ZIP code, or a city and 2-letter state like \"Dayton, OH\".")
+
+    # The state is whatever the query ends with -- a 2-letter code or a full
+    # name -- so try the longest tail first ("West Virginia" before "Virginia").
+    words = q.replace(".", "").replace(",", " ").split()
+    for n in (3, 2, 1):
+        if len(words) > n:
+            state = STATE_LOOKUP.get(" ".join(words[-n:]).lower())
+            if state:
+                return "city", " ".join(words[:-n]), state
+    raise PerDiemError('Enter a 5-digit ZIP code, or a city and state like "Dayton, Ohio" or "Dayton, OH".')
 
 
 def _find_row(data, kind, key, state):

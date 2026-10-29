@@ -647,7 +647,7 @@
       </div>
       <form id="per-diem-form">
         <label>ZIP code, or city and state
-          <input type="text" name="q" placeholder="e.g. 45402 or Dayton, OH" autocomplete="off" autocapitalize="off" required>
+          <input type="text" name="q" placeholder="e.g. 45402 or Dayton, Ohio" autocomplete="off" autocapitalize="off" required>
         </label>
         <label>Travel date
           <input type="date" name="date" value="${todayISO()}" required>
