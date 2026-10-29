@@ -19,6 +19,7 @@ from pdf_report import build_trip_pdf
 from receipt_parser import parse_receipt_image
 from ai_receipt_parser import parse_receipt_with_ai
 from image_processing import downscale_receipt_image
+import per_diem
 
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -229,6 +230,18 @@ def categories():
         "mileage_category": MILEAGE_CATEGORY,
         "mileage_rate": rate,
     })
+
+
+# ---------- Per diem ----------
+
+
+@app.route("/api/per-diem")
+@require_auth
+def per_diem_lookup():
+    try:
+        return jsonify(per_diem.lookup(request.args.get("q"), request.args.get("date")))
+    except per_diem.PerDiemError as e:
+        return jsonify({"error": str(e)}), e.status
 
 
 # ---------- Clients ----------

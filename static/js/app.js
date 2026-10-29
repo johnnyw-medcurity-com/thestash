@@ -237,7 +237,7 @@
         title: "My Trips",
         right: `
           <span class="topbar-links">
-            <a class="link-btn" href="https://www.gsa.gov/travel/plan-book/per-diem-rates" target="_blank" rel="noopener noreferrer">Per Diem Rates</a>
+            <button class="link-btn" data-action="per-diem">Per Diem Rates</button>
             <button class="link-btn" data-action="logout">Log out</button>
           </span>
         `,
@@ -251,6 +251,7 @@
 
     bindNavButtons(APP);
     APP.querySelector('[data-action="logout"]').addEventListener("click", logout);
+    APP.querySelector('[data-action="per-diem"]').addEventListener("click", openPerDiemModal);
 
     const trips = await api("/api/trips");
     const content = APP.querySelector("#dash-content");
@@ -634,6 +635,67 @@
     });
     document.body.appendChild(backdrop);
     return backdrop;
+  }
+
+  // ---------------- Per diem lookup ----------------
+
+  function openPerDiemModal() {
+    const modal = openModal(`
+      <div class="modal-header">
+        <h2 style="margin:0;">Per Diem Rates</h2>
+        <button class="modal-close" data-close>&times;</button>
+      </div>
+      <form id="per-diem-form">
+        <label>ZIP code, or city and state
+          <input type="text" name="q" placeholder="e.g. 45402 or Dayton, OH" autocomplete="off" autocapitalize="off" required>
+        </label>
+        <label>Travel date
+          <input type="date" name="date" value="${todayISO()}" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Look up rates</button>
+      </form>
+      <div id="per-diem-result" style="margin-top:14px;"></div>
+      <p class="muted" style="margin:14px 0 0;">Federal (GSA) rates for the continental U.S.
+        &middot; <a href="https://www.gsa.gov/travel/plan-book/per-diem-rates" target="_blank" rel="noopener noreferrer">Full tables on GSA.gov</a></p>
+    `);
+    modal.querySelector("[data-close]").addEventListener("click", () => modal.remove());
+
+    const form = modal.querySelector("#per-diem-form");
+    const resultEl = modal.querySelector("#per-diem-result");
+    const usd = (n) => "$" + (Number.isInteger(n) ? n : n.toFixed(2));
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const params = new URLSearchParams({ q: fd.get("q"), date: fd.get("date") });
+      const restore = setBusy(form.querySelector('button[type=submit]'), "Looking up…");
+      try {
+        const r = await api(`/api/per-diem?${params}`);
+        const place = r.is_standard ? "Standard rate" : escapeHtml(r.location);
+        const where = [r.county && !r.is_standard ? escapeHtml(r.county) : "", r.state && !r.is_standard ? escapeHtml(r.state) : ""].filter(Boolean).join(", ");
+        resultEl.innerHTML = `
+          <div class="card" style="margin-bottom:0;">
+            <div style="font-weight:700;">${place}</div>
+            ${where ? `<div class="muted">${where}</div>` : ""}
+            <div class="per-diem-figures">
+              <div><div class="per-diem-amount">${usd(r.lodging)}</div><div class="muted">Lodging / night<br>(${escapeHtml(r.month)})</div></div>
+              <div><div class="per-diem-amount">${usd(r.meals)}</div><div class="muted">Meals &amp; incidentals / day</div></div>
+              <div><div class="per-diem-amount">${usd(r.first_last_day)}</div><div class="muted">First &amp; last travel day (75%)</div></div>
+            </div>
+            ${r.notes.map((n) => `<p class="muted" style="margin:10px 0 0;">${escapeHtml(n)}</p>`).join("")}
+            <details style="margin-top:10px;">
+              <summary class="muted" style="cursor:pointer;">Lodging for every month (FY${r.fiscal_year})</summary>
+              <div class="per-diem-months">
+                ${r.months.map((m) => `<div><span class="muted">${escapeHtml(m.short)}</span> ${usd(m.lodging)}</div>`).join("")}
+              </div>
+            </details>
+          </div>`;
+      } catch (err) {
+        resultEl.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+      } finally {
+        restore();
+      }
+    });
   }
 
   function openExpenseModal(tripId, existing, { openPhotoPicker = true } = {}) {

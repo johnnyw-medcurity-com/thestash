@@ -66,6 +66,27 @@ Without a key set (or if a call to it fails for any reason — network issue, ra
 limit, etc.), the app automatically falls back to the free local OCR described
 below, so it never hard-fails on a missing key.
 
+## Per diem rates (yearly refresh)
+
+The **Per Diem Rates** button on the dashboard looks up GSA's federal lodging and
+meals rates for a ZIP code (or city and state) and travel date. The rates come from
+`data/per_diem_fy<YYYY>.json`, which is saved in the repo rather than fetched live:
+GSA only changes the rates once a year, and PythonAnywhere's free tier can't reach
+`api.gsa.gov` from the server. Alaska, Hawaii and territories aren't included.
+
+GSA publishes the next fiscal year's rates around mid-August (they take effect
+Oct 1). Each year, refresh the file from GSA's free API and commit it:
+
+```bash
+GSA_API_KEY=your-key python3 update_per_diem.py 2028
+git add data && git commit -m "Update per diem rates for FY2028" && git push
+```
+
+Get a free key from the signup form at <https://open.gsa.gov/api/perdiem/>. (Without
+`GSA_API_KEY` the script uses a shared demo key limited to about 10 requests per
+hour.) If a new year's file hasn't been added yet, the app keeps showing the closest
+year it has and says so.
+
 ## Run
 
 ```bash

@@ -60,15 +60,13 @@ html, body {
   gap: 8px;
 }
 
-.topbar button.link-btn,
-.topbar a.link-btn {
+.topbar button.link-btn {
   background: none;
   border: none;
   color: #cbd5e1;
   font-size: 14px;
   padding: 6px 8px;
   cursor: pointer;
-  text-decoration: none;
 }
 
 .topbar-links {
@@ -306,6 +304,26 @@ button {
   padding: 8px 12px;
   margin-bottom: 12px;
   font-weight: 600;
+}
+
+.per-diem-figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.per-diem-amount {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+.per-diem-months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 10px;
+  margin-top: 8px;
+  font-size: 14px;
 }
 
 .filter-total {
