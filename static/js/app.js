@@ -276,7 +276,7 @@
       </button>`;
 
     const FILTERS = ["all", ...TRIP_STATUSES];
-    let currentFilter = "all";
+    let currentFilter = "draft";
 
     // A trip belongs to the year it starts in. Defaults to the current year;
     // the current year is always offered even if it has no trips yet.
