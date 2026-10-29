@@ -572,17 +572,16 @@
           alert("Add at least one expense before submitting this trip.");
           return;
         }
-        const restore = setBusy(e.currentTarget, "Submitting…");
+        const restore = setBusy(e.currentTarget, "Preparing…");
         try {
-          // Build the PDF first so a failure leaves the trip untouched, and
-          // so the share button in the next window has the file ready --
-          // phones only allow sharing straight from a tap, not after a wait.
-          const report = await fetchReport(trip);
-          await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: "submitted" } });
-          await renderTripDetail(trip.id);
-          openSendReportModal(trip, report, { justSubmitted: true });
+          // Build the PDF before opening the window so its share button has
+          // the file ready -- phones only allow sharing straight from a tap,
+          // not after a wait. The trip isn't marked Submitted until the
+          // person actually sends or downloads it in that window.
+          openSendReportModal(trip, await fetchReport(trip), { submitting: true });
         } catch (err) {
-          alert("Could not submit the trip: " + err.message);
+          alert("Could not prepare the report: " + err.message);
+        } finally {
           restore();
         }
       });
@@ -592,7 +591,7 @@
       emailBtn.addEventListener("click", async (e) => {
         const restore = setBusy(e.currentTarget, "Preparing…");
         try {
-          openSendReportModal(trip, await fetchReport(trip), { justSubmitted: false });
+          openSendReportModal(trip, await fetchReport(trip), { submitting: false });
         } catch (err) {
           alert("Could not generate the report: " + err.message);
         } finally {
@@ -1031,11 +1030,12 @@
     return report.filename;
   }
 
-  // The app can't attach a file to an addressed email, or see whether the
-  // email was sent, without holding mail credentials -- so this hands the PDF
-  // to the phone's share sheet (which attaches it) or opens an addressed
-  // draft (which doesn't), and leaves the actual sending to the person.
-  function openSendReportModal(trip, report, { justSubmitted }) {
+  // The app can't send mail or see whether it was sent without holding mail
+  // credentials -- so this hands the PDF to the phone's share sheet, which
+  // attaches it to a new email, and leaves addressing and sending to the
+  // person. Where sharing isn't available (most computers) it falls back to
+  // a plain download.
+  function openSendReportModal(trip, report, { submitting }) {
     const recipient = state.categories.report_recipient || "";
     const subject = `Expense report: ${trip.client_name} (${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)})`;
     const body = [
@@ -1055,42 +1055,64 @@
 
     const modal = openModal(`
       <div class="modal-header">
-        <h2 style="margin:0;">${justSubmitted ? "Trip submitted" : "Send report"}</h2>
-        <button class="modal-close" data-close>&times;</button>
+        <h2 style="margin:0;">${submitting ? "Submit trip" : "Send report"}</h2>
+        <button class="modal-close" data-close aria-label="Cancel">&times;</button>
       </div>
-      <p class="muted" style="margin-top:0;">${justSubmitted ? "It's marked Submitted. " : ""}Last step: send the report to ${to}.</p>
+      <p class="muted" id="send-intro" style="margin-top:0;">Email the report to ${to}.${submitting ? " The trip is marked Submitted once you send it &mdash; cancel to go back and finish up first." : ""}</p>
       <div class="send-actions">
         ${canShareFile ? `
-          <button class="btn btn-primary" data-action="share-pdf">Send with PDF attached</button>
-          <p class="muted" style="margin:0;">Pick your email app (Mail, Outlook…) and address it to ${to}.</p>
-          <button class="btn btn-outline" data-action="open-draft">Open an addressed draft instead</button>
-          <p class="muted" style="margin:0;">The draft is pre-filled but you'll need to attach the PDF yourself.</p>
-          <button class="btn btn-outline" data-action="save-pdf">Download PDF</button>
+          <button class="btn btn-primary" data-action="share-pdf">Email report with PDF attached</button>
+          <p class="muted" id="send-hint" style="margin:0;">Pick your email app (Mail, Outlook…), then enter ${to} as the recipient and send.</p>
         ` : `
-          <button class="btn btn-primary" data-action="save-pdf">1. Download PDF</button>
-          <button class="btn btn-outline" data-action="open-draft">2. Open email draft</button>
-          <p class="muted" style="margin:0;">The draft is addressed to ${to}. Attach the PDF you just downloaded, then send.</p>
+          <button class="btn btn-primary" data-action="save-pdf">${submitting ? "Download PDF &amp; submit" : "Download PDF"}</button>
+          <p class="muted" id="send-hint" style="margin:0;">Then attach it to an email to ${to} and send.</p>
         `}
-        <button class="btn btn-outline" data-close>Done</button>
+        <button class="btn btn-outline" id="send-cancel" data-close>Cancel</button>
       </div>
     `);
     modal.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => modal.remove()));
-    modal.querySelector('[data-action="save-pdf"]').addEventListener("click", () => saveReport(report));
-    modal.querySelector('[data-action="open-draft"]').addEventListener("click", () => {
-      const a = document.createElement("a");
-      a.href = `mailto:${encodeURIComponent(recipient).replace(/%40/g, "@")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
+
+    let marked = !submitting;
+    async function markSubmitted() {
+      if (marked) return true;
+      try {
+        await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: "submitted" } });
+      } catch (err) {
+        alert("The report went out, but the trip couldn't be marked Submitted: " + err.message + ". Set it with the status buttons.");
+        return false;
+      }
+      marked = true;
+      trip.status = "submitted";
+      renderTripDetail(trip.id);
+      return true;
+    }
+
+    const saveBtn = modal.querySelector('[data-action="save-pdf"]');
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        saveReport(report);
+        if (await markSubmitted() && submitting) {
+          modal.querySelector("h2").textContent = "Trip submitted";
+          modal.querySelector("#send-intro").innerHTML = "&#10003; Marked Submitted.";
+          modal.querySelector("#send-hint").innerHTML = `Attach the PDF you just downloaded to an email to ${to} and send it.`;
+          saveBtn.innerHTML = "Download PDF again";
+          modal.querySelector("#send-cancel").textContent = "Done";
+        }
+      });
+    }
     const shareBtn = modal.querySelector('[data-action="share-pdf"]');
     if (shareBtn) {
       shareBtn.addEventListener("click", async () => {
         try {
           await navigator.share({ files: [file], title: subject, text: body });
         } catch (err) {
-          if (err.name !== "AbortError") alert("Couldn't open sharing on this device. Use Download PDF instead.");
+          // Backing out of the share sheet counts as not sending: stay here
+          // with the trip untouched so they can retry or cancel.
+          if (err.name !== "AbortError") alert("Couldn't open sharing on this device. Go back and use Download PDF instead.");
+          return;
         }
+        await markSubmitted();
+        modal.remove();
       });
     }
   }
