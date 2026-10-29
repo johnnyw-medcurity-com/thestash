@@ -60,13 +60,20 @@ html, body {
   gap: 8px;
 }
 
-.topbar button.link-btn {
+.topbar button.link-btn,
+.topbar a.link-btn {
   background: none;
   border: none;
   color: #cbd5e1;
   font-size: 14px;
   padding: 6px 8px;
   cursor: pointer;
+  text-decoration: none;
+}
+
+.topbar-links {
+  display: flex;
+  align-items: center;
 }
 
 .topbar .back-btn {

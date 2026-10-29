@@ -236,7 +236,10 @@
       ${topbar({
         title: "My Trips",
         right: `
-          <button class="link-btn" data-action="logout">Log out</button>
+          <span class="topbar-links">
+            <a class="link-btn" href="https://www.gsa.gov/travel/plan-book/per-diem-rates" target="_blank" rel="noopener noreferrer">Per Diem Rates</a>
+            <button class="link-btn" data-action="logout">Log out</button>
+          </span>
         `,
       })}
       <div class="screen" id="dash-content">
