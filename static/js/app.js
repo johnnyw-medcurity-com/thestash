@@ -7,7 +7,7 @@
     token: localStorage.getItem("token") || null,
     user: JSON.parse(localStorage.getItem("user") || "null"),
     clients: [],
-    categories: { covered: [], needs_review: "", mileage_category: "", mileage_rate: 0 },
+    categories: { covered: [], needs_review: "", mileage_category: "", mileage_rate: 0, report_recipient: "" },
   };
 
   // ---------------- API helper ----------------
@@ -487,8 +487,19 @@
 
       <div class="card">
         <h3>Report</h3>
-        <p class="muted">Generate a PDF report for this trip to send to whoever needs to review or reimburse it.</p>
-        <button class="btn btn-outline" data-action="download-report">Download PDF</button>
+        ${trip.status === "draft" ? `
+          <p class="muted">All done with this trip? Submitting marks it Submitted and sets up an email with the PDF report to send.</p>
+          <div class="send-actions">
+            <button class="btn btn-primary" data-action="submit-trip">Submit trip</button>
+            <button class="btn btn-outline" data-action="download-report">Download PDF</button>
+          </div>
+        ` : `
+          <p class="muted">Send the PDF report to whoever needs to review or reimburse this trip.</p>
+          <div class="send-actions">
+            <button class="btn btn-primary" data-action="email-report">Email report</button>
+            <button class="btn btn-outline" data-action="download-report">Download PDF</button>
+          </div>
+        `}
       </div>
 
       <div class="card" style="border-color:#fecaca;">
@@ -554,6 +565,41 @@
         restore();
       }
     });
+    const submitBtn = root.querySelector('[data-action="submit-trip"]');
+    if (submitBtn) {
+      submitBtn.addEventListener("click", async (e) => {
+        if ((trip.expenses || []).length === 0) {
+          alert("Add at least one expense before submitting this trip.");
+          return;
+        }
+        const restore = setBusy(e.currentTarget, "Submitting…");
+        try {
+          // Build the PDF first so a failure leaves the trip untouched, and
+          // so the share button in the next window has the file ready --
+          // phones only allow sharing straight from a tap, not after a wait.
+          const report = await fetchReport(trip);
+          await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: "submitted" } });
+          await renderTripDetail(trip.id);
+          openSendReportModal(trip, report, { justSubmitted: true });
+        } catch (err) {
+          alert("Could not submit the trip: " + err.message);
+          restore();
+        }
+      });
+    }
+    const emailBtn = root.querySelector('[data-action="email-report"]');
+    if (emailBtn) {
+      emailBtn.addEventListener("click", async (e) => {
+        const restore = setBusy(e.currentTarget, "Preparing…");
+        try {
+          openSendReportModal(trip, await fetchReport(trip), { justSubmitted: false });
+        } catch (err) {
+          alert("Could not generate the report: " + err.message);
+        } finally {
+          restore();
+        }
+      });
+    }
     root.querySelector('[data-action="delete-trip"]').addEventListener("click", (e) => deleteTrip(trip.id, e.currentTarget));
     root.querySelectorAll('[data-action="set-status"]').forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -961,11 +1007,15 @@
 
   // ---------------- Report ----------------
 
-  async function downloadReport(trip) {
+  async function fetchReport(trip) {
     const res = await api(`/api/trips/${trip.id}/report`);
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
     const filename = `expense-report-${(trip.client_name || "trip").replace(/[^a-z0-9]+/gi, "-")}-${trip.start_date}.pdf`;
+    return { blob, filename };
+  }
+
+  function saveReport({ blob, filename }) {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
@@ -973,7 +1023,76 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    return filename;
+  }
+
+  async function downloadReport(trip) {
+    const report = await fetchReport(trip);
+    saveReport(report);
+    return report.filename;
+  }
+
+  // The app can't attach a file to an addressed email, or see whether the
+  // email was sent, without holding mail credentials -- so this hands the PDF
+  // to the phone's share sheet (which attaches it) or opens an addressed
+  // draft (which doesn't), and leaves the actual sending to the person.
+  function openSendReportModal(trip, report, { justSubmitted }) {
+    const recipient = state.categories.report_recipient || "";
+    const subject = `Expense report: ${trip.client_name} (${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)})`;
+    const body = [
+      "Hi,",
+      "",
+      `My expense report for ${trip.client_name}${trip.purpose ? " (" + trip.purpose + ")" : ""}, ${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)}, is ready. Total: ${fmtMoney(trip.total)}.`,
+      "",
+      "I've attached the PDF report.",
+      "",
+      "Thanks,",
+      (state.user && state.user.name) || "",
+    ].join("\r\n");
+
+    const file = new File([report.blob], report.filename, { type: "application/pdf" });
+    const canShareFile = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    const to = recipient ? `<strong>${escapeHtml(recipient)}</strong>` : "your recipient";
+
+    const modal = openModal(`
+      <div class="modal-header">
+        <h2 style="margin:0;">${justSubmitted ? "Trip submitted" : "Send report"}</h2>
+        <button class="modal-close" data-close>&times;</button>
+      </div>
+      <p class="muted" style="margin-top:0;">${justSubmitted ? "It's marked Submitted. " : ""}Last step: send the report to ${to}.</p>
+      <div class="send-actions">
+        ${canShareFile ? `
+          <button class="btn btn-primary" data-action="share-pdf">Send with PDF attached</button>
+          <p class="muted" style="margin:0;">Pick your email app (Mail, Outlook…) and address it to ${to}.</p>
+          <button class="btn btn-outline" data-action="open-draft">Open an addressed draft instead</button>
+          <p class="muted" style="margin:0;">The draft is pre-filled but you'll need to attach the PDF yourself.</p>
+          <button class="btn btn-outline" data-action="save-pdf">Download PDF</button>
+        ` : `
+          <button class="btn btn-primary" data-action="save-pdf">1. Download PDF</button>
+          <button class="btn btn-outline" data-action="open-draft">2. Open email draft</button>
+          <p class="muted" style="margin:0;">The draft is addressed to ${to}. Attach the PDF you just downloaded, then send.</p>
+        `}
+        <button class="btn btn-outline" data-close>Done</button>
+      </div>
+    `);
+    modal.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => modal.remove()));
+    modal.querySelector('[data-action="save-pdf"]').addEventListener("click", () => saveReport(report));
+    modal.querySelector('[data-action="open-draft"]').addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = `mailto:${encodeURIComponent(recipient).replace(/%40/g, "@")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+    const shareBtn = modal.querySelector('[data-action="share-pdf"]');
+    if (shareBtn) {
+      shareBtn.addEventListener("click", async () => {
+        try {
+          await navigator.share({ files: [file], title: subject, text: body });
+        } catch (err) {
+          if (err.name !== "AbortError") alert("Couldn't open sharing on this device. Use Download PDF instead.");
+        }
+      });
+    }
   }
 
   render();

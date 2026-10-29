@@ -306,6 +306,12 @@ button {
   font-weight: 600;
 }
 
+.send-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .per-diem-figures {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -32,6 +32,9 @@ MAX_CONTENT_LENGTH = 15 * 1024 * 1024  # 15 MB
 ALLOWED_EMAIL_DOMAIN = "medcurity.com"
 # A trip's lifecycle: drafted, sent off for reimbursement, then actually paid.
 TRIP_STATUSES = ("draft", "submitted", "reimbursed")
+# Who the "Submit trip" email draft is addressed to. Blank leaves the To:
+# line empty for the sender to fill in.
+REPORT_RECIPIENT = "bonnieg@medcurity.com"
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
@@ -229,6 +232,7 @@ def categories():
         "needs_review": NEEDS_REVIEW_CATEGORY,
         "mileage_category": MILEAGE_CATEGORY,
         "mileage_rate": rate,
+        "report_recipient": REPORT_RECIPIENT,
     })
 
 
