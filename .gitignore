@@ -5,6 +5,7 @@ __pycache__/
 expense.db
 expense.db-shm
 expense.db-wal
+expense.db.bak-*
 .secret_key
 uploads/*
 !uploads/.gitkeep
