@@ -83,6 +83,8 @@ def trip_public(row, total=None):
         "end_date": row["end_date"],
         "status": row["status"],
         "created_at": row["created_at"],
+        "submitted_at": row["submitted_at"],
+        "reimbursed_at": row["reimbursed_at"],
     }
     if total is not None:
         d["total"] = total
@@ -379,6 +381,21 @@ def update_trip(trip_id):
     if "status" in fields and fields["status"] not in TRIP_STATUSES:
         db.close()
         return jsonify({"error": f"Status must be one of: {', '.join(TRIP_STATUSES)}"}), 400
+
+    # Stamp the date a trip reached each stage; moving back a stage clears the
+    # later dates so they never describe a status the trip isn't in.
+    if "status" in fields and fields["status"] != row["status"]:
+        today = datetime.date.today().isoformat()
+        new = fields["status"]
+        if new == "draft":
+            fields["submitted_at"] = None
+            fields["reimbursed_at"] = None
+        elif new == "submitted":
+            fields["submitted_at"] = today
+            fields["reimbursed_at"] = None
+        else:
+            fields["submitted_at"] = row["submitted_at"] or today
+            fields["reimbursed_at"] = today
 
     if fields:
         set_clause = ", ".join(f"{k} = ?" for k in fields)

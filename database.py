@@ -86,6 +86,11 @@ def init_db():
         # Existing mileage rows were all priced at the old fixed rate.
         conn.execute("UPDATE expenses SET mileage_rate = 0.725 WHERE miles IS NOT NULL")
 
+    trip_cols = {row["name"] for row in conn.execute("PRAGMA table_info(trips)")}
+    for col in ("submitted_at", "reimbursed_at"):
+        if col not in trip_cols:
+            conn.execute(f"ALTER TABLE trips ADD COLUMN {col} TEXT")
+
     # Seed the rate-history table once from the previous hardcoded defaults,
     # so the switch to a DB-managed, user-editable history doesn't lose the
     # dates/rates already baked into existing mileage expenses.

@@ -143,6 +143,13 @@
     return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
+  function statusDatesText(t) {
+    return [
+      t.submitted_at ? "Submitted " + fmtDate(t.submitted_at) : "",
+      t.reimbursed_at ? "Reimbursed " + fmtDate(t.reimbursed_at) : "",
+    ].filter(Boolean).join(" · ");
+  }
+
   function todayISO() {
     return new Date().toISOString().slice(0, 10);
   }
@@ -273,6 +280,7 @@
         </div>
         <div class="dates">${escapeHtml(t.purpose || "Business trip")} &middot; ${fmtDate(t.start_date)} – ${fmtDate(t.end_date)}</div>
         <span class="status-badge status-${t.status}">${escapeHtml(t.status)}</span>
+        ${statusDatesText(t) ? `<div class="dates">${statusDatesText(t)}</div>` : ""}
       </button>`;
 
     const FILTERS = ["all", ...TRIP_STATUSES];
@@ -437,6 +445,7 @@
         </div>
         <p class="muted" style="margin:4px 0 0">${escapeHtml(trip.purpose || "Business trip")}</p>
         <p class="muted" style="margin:2px 0 0">${fmtDate(trip.start_date)} – ${fmtDate(trip.end_date)}</p>
+        <p class="muted" id="status-dates" style="margin:2px 0 0">${statusDatesText(trip)}</p>
         <div class="divider"></div>
         <div class="total-bar"><span>Total</span><span>${fmtMoney(trip.total)}</span></div>
         <div class="status-stepper" style="margin-top:10px;">
@@ -607,8 +616,11 @@
         const stepper = btn.closest(".status-stepper");
         const restore = setBusy(btn, "…");
         try {
-          await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
+          const updated = await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
           trip.status = newStatus;
+          trip.submitted_at = updated.submitted_at;
+          trip.reimbursed_at = updated.reimbursed_at;
+          root.querySelector("#status-dates").textContent = statusDatesText(trip);
           restore();
           // Patch the badge and stepper in place rather than re-rendering
           // the whole screen, so the "Saved" confirmation below actually
