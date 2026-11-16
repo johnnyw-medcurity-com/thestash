@@ -123,6 +123,21 @@ def default_mileage_rate(db, user_id, date_str=None):
     return rate
 
 
+def device_today(raw):
+    """Today's date as the user's device sees it. The server clock is UTC, so
+    after ~4 pm Pacific it is already tomorrow there. A real local date is
+    never more than a day away from the server's, so anything further off (or
+    missing/unparseable) falls back to the server's date."""
+    server_today = datetime.date.today()
+    try:
+        d = datetime.date.fromisoformat(raw)
+    except (TypeError, ValueError):
+        return server_today.isoformat()
+    if abs((d - server_today).days) > 1:
+        return server_today.isoformat()
+    return d.isoformat()
+
+
 def parse_mileage_rate(db, user_id, raw, date_str):
     """User-supplied $/mile, or the default when blank.
     Raises ValueError for unusable input."""
@@ -383,15 +398,17 @@ def update_trip(trip_id):
         return jsonify({"error": f"Status must be one of: {', '.join(TRIP_STATUSES)}"}), 400
 
     # Stamp the date a trip reached each stage; moving back a stage clears the
-    # later dates so they never describe a status the trip isn't in.
+    # later dates so they never describe a status the trip isn't in. Stepping
+    # back from Reimbursed to Submitted keeps the original submitted date;
+    # only a trip with none (e.g. coming from Draft) gets a new one.
     if "status" in fields and fields["status"] != row["status"]:
-        today = datetime.date.today().isoformat()
+        today = device_today(data.get("status_date"))
         new = fields["status"]
         if new == "draft":
             fields["submitted_at"] = None
             fields["reimbursed_at"] = None
         elif new == "submitted":
-            fields["submitted_at"] = today
+            fields["submitted_at"] = row["submitted_at"] or today
             fields["reimbursed_at"] = None
         else:
             fields["submitted_at"] = row["submitted_at"] or today

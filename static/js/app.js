@@ -150,8 +150,11 @@
     ].filter(Boolean).join(" · ");
   }
 
+  // The date on this device, not UTC (toISOString), which is already
+  // "tomorrow" every evening in the Americas.
   function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 
   async function ensureLookups() {
@@ -616,7 +619,7 @@
         const stepper = btn.closest(".status-stepper");
         const restore = setBusy(btn, "…");
         try {
-          const updated = await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus } });
+          const updated = await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: newStatus, status_date: todayISO() } });
           trip.status = newStatus;
           trip.submitted_at = updated.submitted_at;
           trip.reimbursed_at = updated.reimbursed_at;
@@ -1088,7 +1091,7 @@
     async function markSubmitted() {
       if (marked) return true;
       try {
-        await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: "submitted" } });
+        await api(`/api/trips/${trip.id}`, { method: "PATCH", json: { status: "submitted", status_date: todayISO() } });
       } catch (err) {
         alert("The report went out, but the trip couldn't be marked Submitted: " + err.message + ". Set it with the status buttons.");
         return false;
