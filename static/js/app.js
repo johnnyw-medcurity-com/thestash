@@ -494,7 +494,7 @@
         </div>
         ${expenses.length === 0
           ? `<p class="muted" style="margin-top:8px;">Snap a receipt and the date/vendor/amount/category get filled in for you to confirm — or add an expense manually, handy for things like personal-car mileage that don't have a receipt.</p>`
-          : `<div id="expense-list">${expenses.map(expenseRowHtml).join("")}</div>`}
+          : `<div id="expense-list">${expenseListHtml(expenses)}</div>`}
       </div>
 
       <div class="card">
@@ -520,6 +520,44 @@
     `;
   }
 
+  const MEALS_CATEGORY = "Meals";
+
+  // Expenses grouped by day (oldest first). Within a day they follow the
+  // category order used in the Add Expense form, and each day shows its total
+  // plus a meals total, handy for checking against the per diem meals rate.
+  function expenseListHtml(expenses) {
+    const order = [...state.categories.covered, state.categories.needs_review];
+    const rank = (c) => { const i = order.indexOf(c); return i === -1 ? order.length : i; };
+    const sorted = [...expenses].sort((a, b) =>
+      a.date.localeCompare(b.date) || rank(a.category) - rank(b.category) || a.id - b.id);
+
+    const days = new Map();
+    for (const exp of sorted) {
+      if (!days.has(exp.date)) days.set(exp.date, []);
+      days.get(exp.date).push(exp);
+    }
+
+    const cents = (list) => list.reduce((sum, e) => sum + Math.round(e.amount * 100), 0) / 100;
+    const dayLabel = (iso) => {
+      const [y, m, d] = iso.split("-");
+      return new Date(Number(y), Number(m) - 1, Number(d))
+        .toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    };
+
+    return [...days].map(([date, rows]) => {
+      const meals = rows.filter((e) => e.category === MEALS_CATEGORY);
+      return `
+        <div class="expense-day">
+          <div class="expense-day-header">
+            <span>${escapeHtml(dayLabel(date))}</span>
+            <span>${fmtMoney(cents(rows))}</span>
+          </div>
+          ${meals.length ? `<div class="expense-day-meals"><span>Meals total (${meals.length} ${meals.length === 1 ? "expense" : "expenses"})</span><strong>${fmtMoney(cents(meals))}</strong></div>` : ""}
+          ${rows.map(expenseRowHtml).join("")}
+        </div>`;
+    }).join("");
+  }
+
   function expenseRowHtml(exp) {
     return `
       <div class="expense-row" data-expense-id="${exp.id}">
@@ -529,7 +567,7 @@
         <div class="expense-main" style="flex:1;">
           <div class="cat">${escapeHtml(exp.category)}${exp.flagged ? `<span class="flag-badge">FLAGGED</span>` : ""}</div>
           <div class="vendor">${escapeHtml(exp.vendor || "")}</div>
-          <div class="date">${fmtDate(exp.date)}${exp.miles != null ? ` · ${exp.miles} mi` : ""}${exp.notes ? " · " + escapeHtml(exp.notes) : ""}</div>
+          ${exp.miles != null || exp.notes ? `<div class="date">${[exp.miles != null ? `${exp.miles} mi` : "", exp.notes ? escapeHtml(exp.notes) : ""].filter(Boolean).join(" · ")}</div>` : ""}
           <div class="expense-actions">
             <button data-action="edit-expense" data-id="${exp.id}">Edit</button>
             <button class="danger" data-action="delete-expense" data-id="${exp.id}">Delete</button>
